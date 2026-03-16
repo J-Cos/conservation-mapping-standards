@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description"
+    content="Interactive demonstration of conservation mapping accuracy assessment standards, featuring bootstrap spatial cross-validation with random forests on synthetic remote sensing data.">
+  <title>Conservation Mapping Standards — ZSL Institute of Zoology</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+
+<body>
+
+  <!-- ===== HEADER ===== -->
+  <header class="site-header">
+    <div class="site-header__brand">
+      <div class="site-header__logo">ZSL</div>
+      <div>
+        <div class="site-header__title">Conservation Mapping Standards</div>
+        <div class="site-header__subtitle">Institute of Zoology — Interactive Demonstrator</div>
+      </div>
+    </div>
+  </header>
+
+  <!-- ===== HERO ===== -->
+  <section class="hero">
+    <h1 class="hero__title">How Accurate Is Your Conservation Map?</h1>
+    <p class="hero__desc">
+      An interactive demonstration of the full accuracy assessment pipeline for conservation maps,
+      following the Table&nbsp;1 checklist standard. Generate synthetic remote sensing data,
+      apply spatially-blocked bootstrap cross-validation with random forests, and explore
+      distributions of accuracy metrics and error-corrected summary statistics.
+    </p>
+  </section>
+
+  <!-- ===== MODE TOGGLE ===== -->
+  <div class="mode-toggle">
+    <button id="btn-categorical" class="mode-toggle__btn active">
+      🗺️ Categorical (Land Cover)
+    </button>
+    <button id="btn-continuous" class="mode-toggle__btn">
+      🌳 Continuous (Biomass)
+    </button>
+  </div>
+
+  <!-- ===== MAIN CONTENT ===== -->
+  <main class="main-content">
+
+    <!-- ────────────────────────────────────────────
+       STEP 1: Synthetic Data Generation
+       ──────────────────────────────────────────── -->
+    <article class="step-panel open" data-step="1">
+      <div class="step-panel__header">
+        <div class="step-panel__number">1</div>
+        <h2 class="step-panel__title">Synthetic Data Generation</h2>
+        <div class="checklist-summary"><span class="check">✓</span> Thematic validity &amp; coverage</div>
+        <span class="step-panel__badge step-panel__badge--pending">Pending</span>
+        <svg class="step-panel__chevron" viewBox="0 0 20 20" fill="currentColor">
+          <path fill-rule="evenodd"
+            d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" />
+        </svg>
+      </div>
+      <div class="step-panel__body">
+        <p class="step-description">
+          Generate a <strong>1000×1000 pixel synthetic raster</strong> with <strong>10 spectral bands</strong>
+          exhibiting realistic spatial autocorrelation (Perlin noise with fractal Brownian motion).
+          Ground truth is defined as either <strong>5 land cover classes</strong> (categorical) or
+          <strong>above-ground biomass 0–500 Mg/ha</strong> (continuous), derived from nonlinear
+          combinations of the spectral bands.
+        </p>
+
+        <div class="step-controls">
+          <div class="control-group">
+            <label for="cfg-seed">Random Seed</label>
+            <input type="number" id="cfg-seed" value="42" min="1" max="9999">
+          </div>
+          <div class="control-group">
+            <label for="cfg-training-points">Training Points</label>
+            <input type="number" id="cfg-training-points" value="5000" min="500" max="20000" step="500">
+          </div>
+          <button id="btn-generate" class="btn btn-primary">▶ Generate Data</button>
+        </div>
+
+        <div id="data-stats"></div>
+
+        <div class="viz-grid viz-grid--2 mt-4">
+          <div class="figure-container">
+            <div class="figure-container__title">False-Colour Composite (NIR-R-G)</div>
+            <div class="raster-canvas-wrap">
+              <canvas id="canvas-rgb"></canvas>
+            </div>
+          </div>
+          <div class="figure-container">
+            <div class="figure-container__title" id="truth-title">
+              <span data-mode="categorical">Ground Truth (Land Cover Classification)</span>
+              <span data-mode="continuous">Ground Truth (Above-Ground Biomass)</span>
+            </div>
+            <div class="raster-canvas-wrap">
+              <canvas id="canvas-truth"></canvas>
+            </div>
+            <div id="legend-truth" class="mt-2"></div>
+          </div>
+        </div>
+      </div>
+    </article>
+
+    <!-- ────────────────────────────────────────────
+       STEP 2: Sampling Design & Spatial Blocking
+       ──────────────────────────────────────────── -->
+    <article class="step-panel" data-step="2">
+      <div class="step-panel__header">
+        <div class="step-panel__number">2</div>
+        <h2 class="step-panel__title">Spatial Blocking &amp; Sampling Design</h2>
+        <div class="checklist-summary"><span class="check">✓</span> Spatial validity &amp; data independence</div>
+        <span class="step-panel__badge step-panel__badge--pending">Pending</span>
+        <svg class="step-panel__chevron" viewBox="0 0 20 20" fill="currentColor">
+          <path fill-rule="evenodd"
+            d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" />
+        </svg>
+      </div>
+      <div class="step-panel__body">
+        <p class="step-description">
+          Divide the study area into <strong>spatial blocks</strong> to ensure training and validation
+          data independence. All sampling and cross-validation is performed at the block level.
+          Gold-highlighted blocks in the example below show <strong>out-of-bag (OOB)</strong> blocks
+          for one bootstrap iteration (~36.8% of total).
+        </p>
+
+        <div class="step-controls">
+          <div class="control-group">
+            <label for="cfg-block-size">Block Size (px)</label>
+            <input type="number" id="cfg-block-size" value="50" min="10" max="200" step="10">
+          </div>
+          <button id="btn-create-blocks" class="btn btn-primary">▶ Create Spatial Blocks</button>
+        </div>
+
+        <div id="block-stats"></div>
+
+        <div class="viz-grid viz-grid--2 mt-4">
+          <div class="figure-container">
+            <div class="figure-container__title">Spatial Block Grid + OOB Example</div>
+            <div class="raster-canvas-wrap">
+              <canvas id="canvas-blocks"></canvas>
+            </div>
+          </div>
+          <div class="figure-container">
+            <div class="figure-container__title">Training Points in Spatial Blocks</div>
+            <div class="raster-canvas-wrap">
+              <canvas id="canvas-points"></canvas>
+            </div>
+          </div>
+        </div>
+      </div>
+    </article>
+
+    <!-- ────────────────────────────────────────────
+       STEP 3: Bootstrap SCV Random Forest
+       ──────────────────────────────────────────── -->
+    <article class="step-panel" data-step="3">
+      <div class="step-panel__header">
+        <div class="step-panel__number">3</div>
+        <h2 class="step-panel__title">Bootstrap SCV Random Forest</h2>
+        <div class="checklist-summary"><span class="check">✓</span> Map accuracy &amp; precision</div>
+        <span class="step-panel__badge step-panel__badge--pending">Pending</span>
+        <svg class="step-panel__chevron" viewBox="0 0 20 20" fill="currentColor">
+          <path fill-rule="evenodd"
+            d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" />
+        </svg>
+      </div>
+      <div class="step-panel__body">
+        <p class="step-description">
+          Draw <strong>B bootstrap samples</strong> of spatial blocks (with replacement).
+          For each replicate, train a Random Forest on drawn blocks and validate on the
+          ~36.8% of blocks <em>not drawn</em> (out-of-bag approach). This produces
+          <strong>B independent accuracy estimates</strong> from which distributions
+          and confidence intervals are derived.
+        </p>
+
+        <div class="step-controls">
+          <div class="control-group">
+            <label for="cfg-bootstraps">Bootstrap Replicates</label>
+            <input type="number" id="cfg-bootstraps" value="1000" min="10" max="5000" step="10">
+          </div>
+          <div class="control-group">
+            <label for="cfg-trees">Trees per Forest</label>
+            <input type="number" id="cfg-trees" value="50" min="10" max="500" step="10">
+          </div>
+          <button id="btn-run-bootstrap" class="btn btn-gold">▶ Run Bootstrap</button>
+          <button id="btn-stop-bootstrap" class="btn btn-secondary hidden">⏹ Stop</button>
+        </div>
+
+        <div class="progress-container">
+          <div class="progress-bar">
+            <div class="progress-bar__fill" id="progress-fill"></div>
+          </div>
+          <div class="progress-info" id="progress-info">
+            <span>0 / 0 replicates</span>
+            <span>Ready</span>
+          </div>
+        </div>
+      </div>
+    </article>
+
+    <!-- ────────────────────────────────────────────
+       STEP 4: Accuracy Assessment
+       ──────────────────────────────────────────── -->
+    <article class="step-panel" data-step="4">
+      <div class="step-panel__header">
+        <div class="step-panel__number">4</div>
+        <h2 class="step-panel__title">Accuracy Assessment</h2>
+        <div class="checklist-summary"><span class="check">✓</span> Precision of map accuracy</div>
+        <span class="step-panel__badge step-panel__badge--pending">Pending</span>
+        <svg class="step-panel__chevron" viewBox="0 0 20 20" fill="currentColor">
+          <path fill-rule="evenodd"
+            d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" />
+        </svg>
+      </div>
+      <div class="step-panel__body">
+        <p class="step-description">
+          Distributions of accuracy metrics across all <strong>B bootstrap replicates</strong>.
+          95% confidence intervals indicate the precision with which accuracy is known.
+          <span data-mode="categorical">Dashed red line indicates the 85% accuracy threshold.</span>
+          <span data-mode="continuous">Dashed red line indicates threshold values (R² &gt; 0.8, rel. RMSE &lt;
+            0.2).</span>
+        </p>
+
+        <div id="accuracy-stats"></div>
+
+        <div class="viz-grid viz-grid--3 mt-4">
+          <div class="figure-container">
+            <div class="figure-container__title" id="chart1-container-title"></div>
+            <div class="chart-wrap"><canvas id="chart-overall-acc"></canvas></div>
+          </div>
+          <div class="figure-container">
+            <div class="figure-container__title" id="chart2-container-title"></div>
+            <div class="chart-wrap"><canvas id="chart-user-acc"></canvas></div>
+          </div>
+          <div class="figure-container">
+            <div class="figure-container__title" id="chart3-container-title"></div>
+            <div class="chart-wrap"><canvas id="chart-prod-acc"></canvas></div>
+          </div>
+        </div>
+
+        <!-- Confusion matrix (categorical only) -->
+        <div data-mode="categorical" class="mt-6">
+          <div class="figure-container">
+            <div class="figure-container__title" id="confmat-title">Mean Confusion Matrix</div>
+            <div id="confusion-matrix-container"></div>
+          </div>
+        </div>
+      </div>
+    </article>
+
+    <!-- ────────────────────────────────────────────
+       STEP 5: Summary Statistics & Uncertainty
+       ──────────────────────────────────────────── -->
+    <article class="step-panel" data-step="5">
+      <div class="step-panel__header">
+        <div class="step-panel__number">5</div>
+        <h2 class="step-panel__title">Summary Statistics &amp; Uncertainty</h2>
+        <div class="checklist-summary"><span class="check">✓</span> Error-corrected estimates</div>
+        <span class="step-panel__badge step-panel__badge--pending">Pending</span>
+        <svg class="step-panel__chevron" viewBox="0 0 20 20" fill="currentColor">
+          <path fill-rule="evenodd"
+            d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" />
+        </svg>
+      </div>
+      <div class="step-panel__body">
+        <p class="step-description">
+          <span data-mode="categorical">
+            Error-matrix-corrected <strong>area estimates</strong> with 95% confidence intervals
+            (Olofsson et al. approach). Each bootstrap replicate produces an independent error matrix
+            used to adjust raw pixel counts, accounting for classification errors.
+          </span>
+          <span data-mode="continuous">
+            Bias-corrected <strong>total biomass estimates</strong> with 95% confidence intervals.
+            Mean OOB residuals from each bootstrap are used to correct population sums.
+          </span>
+        </p>
+
+        <div id="summary-stats"></div>
+
+        <div class="viz-grid viz-grid--3 mt-4">
+          <div class="figure-container">
+            <div class="figure-container__title" id="summary-chart-title"></div>
+            <div class="chart-wrap"><canvas id="chart-area-dist"></canvas></div>
+          </div>
+          <div class="figure-container">
+            <div class="figure-container__title">Mean Prediction Map</div>
+            <div class="raster-canvas-wrap">
+              <canvas id="canvas-mean-pred"></canvas>
+            </div>
+          </div>
+          <div class="figure-container">
+            <div class="figure-container__title">Pixel-Level Uncertainty (Std Dev)</div>
+            <div class="raster-canvas-wrap">
+              <canvas id="canvas-uncertainty"></canvas>
+            </div>
+            <div id="legend-uncertainty" class="mt-2"></div>
+          </div>
+        </div>
+      </div>
+    </article>
+
+  </main>
+
+  <!-- ===== FOOTER ===== -->
+  <footer class="site-footer">
+    <p>
+      <strong>Conservation Mapping Standards Interactive Demonstrator</strong><br>
+      Based on the conservation mapping standard checklist (Table 1).
+    </p>
+    <p class="site-footer__line">
+      ZSL Institute of Zoology &nbsp;|&nbsp;
+      Methodology follows Olofsson et al. (2014), spatial cross-validation best practices,
+      and bootstrap estimation of accuracy precision.
+    </p>
+    <p class="site-footer__line">
+      All computation runs locally in your browser. No data is sent to any server.
+    </p>
+  </footer>
+
+  <!-- ===== SCRIPTS ===== -->
+  <script src="lib/chart.min.js"></script>
+  <script src="js/syntheticData.js"></script>
+  <script src="js/spatialBlocking.js"></script>
+  <script src="js/rasterViz.js"></script>
+  <script src="js/charts.js"></script>
+  <script src="js/app.js"></script>
+
+</body>
+
+</html>

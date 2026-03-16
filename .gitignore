@@ -1,0 +1,13 @@
+# Downloaded tools
+gh_*/
+gh.tar.gz
+
+# Python files (not part of the web app)
+*.py
+*.ipynb
+__pycache__/
+*.pyc
+
+# OS files
+.DS_Store
+Thumbs.db
