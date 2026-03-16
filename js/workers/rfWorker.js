@@ -178,7 +178,7 @@ function predictTree(tree, X, startIdx, numBands) {
 
 /* --- Random Forest --- */
 function trainForest(X, y, weights, nSamples, numBands, config, rng, isClassification) {
-    const nTrees = config.nTrees || 50;
+    const nTrees = config.nTrees || 100;
     const trees = [];
 
     for (let t = 0; t < nTrees; t++) {
@@ -392,10 +392,19 @@ self.onmessage = function (e) {
 
         // Full raster prediction (optional, for generating maps)
         let fullPredictions = null;
+        let totalPredictedFull = null;
         if (computeFullMap && fullRasterFeatures) {
             const nFull = fullRasterFeatures.length / numBands;
             const fullIndices = Array.from({ length: nFull }, (_, i) => i);
             fullPredictions = predictForest(trees, fullRasterFeatures, fullIndices, numBands, isClassification, numClasses);
+
+            // Sum full-raster predictions for total biomass estimation
+            if (!isClassification) {
+                let sum = 0;
+                for (let i = 0; i < nFull; i++) sum += fullPredictions[i];
+                // Scale up: predictions are on subsampled raster (stride=2), so multiply by stride²
+                totalPredictedFull = sum * 4;
+            }
         }
 
         self.postMessage({
@@ -403,6 +412,7 @@ self.onmessage = function (e) {
             bootstrapIndex,
             metrics,
             fullPredictions,
+            totalPredictedFull,
             isClassification,
         });
     }

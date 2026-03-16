@@ -40,16 +40,16 @@ Training points are sampled randomly across the raster, and their spectral featu
 
 ### Step 2 · Spatial Blocking
 
-Partitions the raster into a grid of **50×50 pixel blocks** (~400 blocks). Every training point is assigned to its containing block.
+Partitions the raster into a grid of **200×200 pixel blocks** (25 blocks). Every training point is assigned to its containing block.
 
-This is critical because spatially proximate pixels are autocorrelated — if nearby pixels end up in both training and validation sets, accuracy will be inflated. Blocking at the 50-pixel level ensures that training and validation data are spatially independent.
+This is critical because spatially proximate pixels are autocorrelated — if nearby pixels end up in both training and validation sets, accuracy will be inflated. Spatial blocking ensures that training and validation data are spatially independent.
 
 ### Step 3 · Bootstrap Cross-Validation
 
-Runs *B* bootstrap replicates (default: 1,000), each executing in a **Web Worker** for parallel processing:
+Runs *B* bootstrap replicates (default: 100), each executing in a **Web Worker** for parallel processing:
 
 1. **Sample blocks** with replacement — ~63.2% of blocks are drawn into the training set; ~36.8% are out-of-bag (OOB) and used for validation
-2. **Train a random forest** (10 CART trees, `max_depth=12`, `mtry=√p`) on the training blocks
+2. **Train a random forest** (100 CART trees, `max_depth=10`, `mtry=√p`) on the training blocks
 3. **Predict** on OOB pixels and compute accuracy metrics
 4. **Predict** on the full raster to produce a wall-to-wall map
 
@@ -83,8 +83,8 @@ All distributions are rendered as histograms with reference threshold lines (0.8
 **Categorical — Olofsson area correction:**
 Applies the [Olofsson et al. (2014)](https://doi.org/10.1016/j.rse.2014.02.015) error-adjusted area estimation. The confusion matrix is converted to proportions, and map class areas are corrected for commission and omission errors. Confidence intervals are derived from the bootstrap distribution of corrected areas.
 
-**Continuous — Bias-corrected biomass totals:**
-Computes bias-corrected total biomass using the OOB prediction residuals. The bootstrap distribution of corrected totals provides the confidence interval.
+**Continuous — Predicted vs. true total biomass:**
+Each bootstrap replicate predicts biomass for the entire 1M-pixel raster. The distribution of predicted totals across replicates quantifies model uncertainty. This is compared directly against the known true total biomass, with the true value displayed as a reference line on the histogram. If the true total falls within the bootstrap distribution, the model is unbiased.
 
 **Uncertainty maps:**
 - *Categorical*: Pixel-level prediction standard deviation across replicates (high values = unstable classification)
@@ -107,6 +107,7 @@ js/
     └── rfWorker.js     Self-contained CART + Random Forest (runs in Web Workers)
 lib/
 └── chart.min.js        Chart.js v4 (vendored)
+tests.js                Unit + integration test suite (Node.js)
 ```
 
 ### Key Design Decisions
@@ -132,6 +133,28 @@ npx -y serve .
 
 # Then open http://localhost:8080
 ```
+
+## Testing
+
+The project includes a comprehensive test suite (`tests.js`) covering all core analytical functions. Run with:
+
+```bash
+node tests.js
+```
+
+Expected output: **223 assertions, 0 failures.**
+
+### Test Sections
+
+| Section                      | Tests | What's Verified                                                                                                                                                                                                                                     |
+| ---------------------------- | ----: | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **SyntheticData**            |   135 | Raster dimensions, band generation, deterministic seeding, value ranges, categorical class validity, continuous ground truth, point sampling uniqueness, feature extraction                                                                         |
+| **SpatialBlocking**          |    38 | Block grid geometry, pixel-to-block assignment correctness, point assignment, bootstrap sampling, OOB fraction ≈ 36.8% (verified over 1,000 trials), deterministic seeding, weight consistency, `getPixelsInBlocks` counts, `getTrainingData` shape |
+| **Random Forest**            |    10 | Seeded RNG determinism, classification accuracy > 90% on linearly separable 2D data, regression R² > 0.85 on linear data, correct typed array output                                                                                                |
+| **Accuracy Metrics**         |    17 | Perfect classification (OA/UA/PA = 1.0), known misclassification with hand-computed confusion matrix, RMSE/R²/mean residual/total predicted against exact values                                                                                    |
+| **Olofsson Area Correction** |     6 | Corrected areas sum to total pixels, perfect classification preserves areas, reasonable values for imperfect matrices                                                                                                                               |
+| **Summary Statistics**       |     9 | Mean/median of known sequences, CI bounds ordering, single-value edge case, odd-length median                                                                                                                                                       |
+| **Integration**              |     8 | Full pipeline: generate → block → bootstrap → train → predict → metrics → area correction, with OA > 50% and corrected areas summing to 1M                                                                                                          |
 
 ---
 

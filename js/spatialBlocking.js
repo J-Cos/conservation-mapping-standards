@@ -5,7 +5,7 @@
    ============================================================ */
 
 const SpatialBlocking = (() => {
-    const DEFAULT_BLOCK_SIZE = 50; // pixels per block side
+    const DEFAULT_BLOCK_SIZE = 200; // pixels per block side
 
     /**
      * Create spatial blocks for a given raster.

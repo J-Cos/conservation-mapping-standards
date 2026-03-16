@@ -27,11 +27,11 @@ const App = (() => {
 
         // Config
         config: {
-            numBootstraps: 1000,
-            nTrees: 50,
+            numBootstraps: 100,
+            nTrees: 100,
             maxDepth: 10,
             minLeafSamples: 5,
-            blockSize: 50,
+            blockSize: 200,
             numTrainingPoints: 5000,
             seed: 42,
             numWorkers: Math.min(navigator.hardwareConcurrency || 4, 8),
@@ -72,13 +72,13 @@ const App = (() => {
 
         // Config inputs
         document.getElementById('cfg-bootstraps').addEventListener('change', (e) => {
-            state.config.numBootstraps = parseInt(e.target.value) || 1000;
+            state.config.numBootstraps = parseInt(e.target.value) || 100;
         });
         document.getElementById('cfg-trees').addEventListener('change', (e) => {
-            state.config.nTrees = parseInt(e.target.value) || 50;
+            state.config.nTrees = parseInt(e.target.value) || 100;
         });
         document.getElementById('cfg-block-size').addEventListener('change', (e) => {
-            state.config.blockSize = parseInt(e.target.value) || 50;
+            state.config.blockSize = parseInt(e.target.value) || 200;
         });
         document.getElementById('cfg-training-points').addEventListener('change', (e) => {
             state.config.numTrainingPoints = parseInt(e.target.value) || 5000;
@@ -759,31 +759,32 @@ const App = (() => {
     function renderContinuousSummary() {
         const results = state.results;
 
-        // Total biomass estimates from residual correction
-        const totalBiomass = results.map(r => {
-            // Simple: use mean prediction * total pixels, corrected by mean residual
-            const correction = r.metrics.meanResidual || 0;
-            return (r.metrics.totalPredicted || 0) - correction * (r.metrics.n || 1);
-        });
+        // Predicted total biomass from full-raster predictions per replicate
+        const predictedTotals = results
+            .filter(r => r.totalPredictedFull != null)
+            .map(r => r.totalPredictedFull);
 
-        const stats = PNASCharts.summaryStats(totalBiomass);
-
-        // True total biomass
+        // True total biomass (ground truth)
         const d = state.data;
         let trueTotal = 0;
         for (let i = 0; i < d.continuousTruth.length; i++) trueTotal += d.continuousTruth[i];
 
         const statsEl = document.getElementById('summary-stats');
-        let html = `<div class="info-alert"><strong>Biomass Estimation with Uncertainty:</strong> Each bootstrap replicate predicts OOB biomass values. The mean residual is used to bias-correct the population sum. The distribution shows uncertainty from spatial cross-validation.</div>`;
+        let html = `<div class="info-alert"><strong>Full-raster biomass estimation with uncertainty:</strong> Each bootstrap replicate predicts biomass for all 1M pixels. The distribution shows the spread of total predicted biomass across replicates. The dashed red line marks the true total. Overlap indicates an unbiased model.</div>`;
 
         html += `<div class="stats-row">`;
-        html += `
+
+        if (predictedTotals.length > 0) {
+            const predStats = PNASCharts.summaryStats(predictedTotals);
+            html += `
       <div class="stat-card">
-        <div class="stat-card__label">Bias-Corrected OOB Total</div>
-        <div class="stat-card__value">${(stats.mean / 1e6).toFixed(2)}M</div>
-        <div class="stat-card__ci">95% CI: [${(stats.ci95[0] / 1e6).toFixed(2)}, ${(stats.ci95[1] / 1e6).toFixed(2)}]M Mg</div>
+        <div class="stat-card__label">Predicted Total (Full Raster)</div>
+        <div class="stat-card__value">${(predStats.mean / 1e6).toFixed(2)}M</div>
+        <div class="stat-card__ci">95% CI: [${(predStats.ci95[0] / 1e6).toFixed(2)}, ${(predStats.ci95[1] / 1e6).toFixed(2)}]M Mg</div>
       </div>
     `;
+        }
+
         html += `
       <div class="stat-card">
         <div class="stat-card__label">True Total (Full Raster)</div>
@@ -796,15 +797,18 @@ const App = (() => {
         html += `</div>`;
         statsEl.innerHTML = html;
 
-        // Biomass distribution
+        // Predicted total biomass distribution with true total as reference line
         PNASCharts.destroy(state.charts.areaDist);
-        document.getElementById('summary-chart-title').textContent = 'Bias-Corrected Total Biomass';
-        state.charts.areaDist = PNASCharts.histogram('chart-area-dist', totalBiomass.map(v => v / 1e6), {
-            xLabel: 'Total Biomass (M Mg)',
-            yLabel: 'Frequency',
-            color: '#228833',
-            bins: 25,
-        });
+        document.getElementById('summary-chart-title').textContent = 'Predicted Total Biomass Distribution';
+        if (predictedTotals.length > 0) {
+            state.charts.areaDist = PNASCharts.histogram('chart-area-dist', predictedTotals.map(v => v / 1e6), {
+                xLabel: 'Predicted Total Biomass (M Mg)',
+                yLabel: 'Frequency',
+                color: '#228833',
+                bins: 25,
+                thresholdLine: trueTotal / 1e6,
+            });
+        }
     }
 
     function renderUncertaintyMap() {
