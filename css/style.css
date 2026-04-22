@@ -666,6 +666,122 @@ body {
   color: #92400E;
 }
 
+/* --- Expandable Technical Detail Boxes --- */
+.tech-detail {
+  margin-top: var(--space-3);
+  border: 1px solid var(--zsl-green-pale);
+  border-radius: var(--border-radius);
+  background: var(--bg-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.tech-detail summary {
+  cursor: pointer;
+  padding: 8px 14px;
+  font-weight: 600;
+  color: var(--zsl-green);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  list-style: none;
+  user-select: none;
+}
+
+.tech-detail summary::-webkit-details-marker { display: none; }
+
+.tech-detail summary::before {
+  content: '▸';
+  font-size: 12px;
+  transition: transform 0.2s ease;
+  display: inline-block;
+}
+
+.tech-detail[open] summary::before {
+  transform: rotate(90deg);
+}
+
+.tech-detail summary:hover {
+  background: var(--zsl-green-wash);
+  border-radius: var(--border-radius) var(--border-radius) 0 0;
+}
+
+.tech-detail .tech-detail__body {
+  padding: 10px 14px 14px;
+  border-top: 1px solid var(--zsl-green-pale);
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.tech-detail .tech-detail__body code {
+  background: rgba(45, 106, 79, 0.08);
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 0.9em;
+  color: var(--zsl-green-dark);
+}
+
+.tech-detail .tech-detail__body dt {
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-top: 8px;
+}
+
+.tech-detail .tech-detail__body dt:first-child {
+  margin-top: 0;
+}
+
+.tech-detail .tech-detail__body dd {
+  margin-left: 0;
+  margin-bottom: 4px;
+}
+
+/* --- Inline Tooltip Terms --- */
+.tech-term {
+  border-bottom: 1px dotted var(--zsl-green-mid);
+  cursor: help;
+  position: relative;
+  display: inline;
+}
+
+.tech-term .tech-term__tip {
+  visibility: hidden;
+  opacity: 0;
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--zsl-navy);
+  color: #fff;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: var(--font-size-xs);
+  line-height: 1.5;
+  white-space: normal;
+  width: max-content;
+  max-width: 280px;
+  z-index: 100;
+  pointer-events: none;
+  transition: opacity 0.15s ease, visibility 0.15s ease;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+  margin-bottom: 6px;
+  font-weight: 400;
+}
+
+.tech-term .tech-term__tip::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 6px solid transparent;
+  border-top-color: var(--zsl-navy);
+}
+
+.tech-term:hover .tech-term__tip {
+  visibility: visible;
+  opacity: 1;
+}
+
 /* Compare pitfall button */
 .btn-compare {
   background: #FEF3C7;

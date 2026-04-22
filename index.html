@@ -63,14 +63,31 @@
       </div>
       <div class="step-panel__body">
         <p class="step-description">
-          Generate a <strong>1000×1000 pixel synthetic landscape</strong> with <strong>10 spectral bands</strong>
+          Generate a <strong>1000×1000 pixel synthetic landscape</strong> with
+          <span class="tech-term">10 spectral bands<span class="tech-term__tip">Spectral bands are measurements of light at different wavelengths (e.g. red, near-infrared, thermal). Satellites capture these to distinguish land cover types.</span></span>
           exhibiting realistic spatial patterns.
           Ground truth is defined as either <strong>5 land cover classes</strong> (categorical) or
-          <strong>above-ground biomass 0–500 Mg/ha</strong> (continuous), derived from nonlinear
-          combinations of the spectral bands.
+          <strong>above-ground biomass</strong> 0–500
+          <span class="tech-term">Mg/ha<span class="tech-term__tip">Megagrams (tonnes) per hectare — a standard unit for measuring how much plant material is present in a given area.</span></span>
+          (continuous), derived from nonlinear combinations of the spectral bands.
           Because this is synthetic data, we know the true answer everywhere &mdash;
           allowing us to rigorously test how well mapping methods recover the truth.
         </p>
+        <details class="tech-detail">
+          <summary>Technical details</summary>
+          <div class="tech-detail__body">
+            <dl>
+              <dt>Spectral bands</dt>
+              <dd>10 bands mimicking a multispectral satellite sensor: Blue, Green, Red, NIR, SWIR-1, SWIR-2, Thermal, plus derived indices (NDVI, NDWI) and a texture layer.</dd>
+              <dt>Spatial autocorrelation</dt>
+              <dd>Generated using <code>Perlin noise</code> with fractal Brownian motion (fBm) — a standard technique for producing smooth, spatially correlated random fields at multiple scales.</dd>
+              <dt>False-colour composite</dt>
+              <dd>The left image maps NIR → Red, Red → Green, Green → Blue. Vegetation appears red/orange because it reflects strongly in the near-infrared.</dd>
+              <dt>Hidden environmental variable</dt>
+              <dd>Class boundaries are influenced by an unobservable environmental gradient (e.g. soil moisture) that the classifier cannot access. This mimics the real-world gap between what a sensor measures and what determines land cover.</dd>
+            </dl>
+          </div>
+        </details>
 
         <div class="step-controls">
           <div class="control-group">
@@ -88,7 +105,7 @@
 
         <div class="viz-grid viz-grid--2 mt-4">
           <div class="figure-container">
-            <div class="figure-container__title">False-Colour Composite (NIR-R-G)</div>
+            <div class="figure-container__title">False-Colour Composite <span class="tech-term">(NIR-R-G)<span class="tech-term__tip">Near-infrared mapped to red channel, red to green, green to blue. Healthy vegetation appears bright red/orange.</span></span></div>
             <div class="raster-canvas-wrap">
               <canvas id="canvas-rgb"></canvas>
             </div>
@@ -124,12 +141,29 @@
       <div class="step-panel__body">
         <p class="step-description">
           Divide the study area into <strong>spatial blocks</strong> to ensure training and validation
-          data are independent. Nearby pixels are similar (spatially autocorrelated), so if they
-          end up in both the training and test set, accuracy will be <em>artificially inflated</em>.
-          By grouping pixels into blocks and splitting at the block level, we prevent this data leakage.
+          data are independent. Nearby pixels are similar
+          (<span class="tech-term">spatially autocorrelated<span class="tech-term__tip">Spatial autocorrelation: nearby locations tend to have similar values. In remote sensing, adjacent pixels share lighting, topography, and land cover — so they are not independent samples.</span></span>),
+          so if they end up in both the training and test set, accuracy will be <em>artificially inflated</em>.
+          By grouping pixels into blocks and splitting at the block level, we prevent this
+          <span class="tech-term">data leakage<span class="tech-term__tip">Data leakage occurs when information from the test set "leaks" into training, making the model appear more accurate than it truly is on new, unseen data.</span></span>.
           Gold-highlighted blocks below are <strong>held out for validation</strong>
           in one example iteration (~36.8% of total).
         </p>
+        <details class="tech-detail">
+          <summary>Technical details</summary>
+          <div class="tech-detail__body">
+            <dl>
+              <dt>Spatial blocking</dt>
+              <dd>Also called <em>spatial cross-validation</em>. Pixels are grouped into square blocks; entire blocks are assigned to either the training or validation set — never split. This ensures that nearby pixels cannot appear in both sets.</dd>
+              <dt>Out-of-bag (OOB) blocks</dt>
+              <dd>In each bootstrap replicate, ~36.8% of blocks are not drawn ("out of bag"). These unseen blocks form the validation set. The model is never tested on data it trained on.</dd>
+              <dt>Block size</dt>
+              <dd>Should be larger than the spatial autocorrelation range. Larger blocks = more conservative (less leakage risk) but fewer independent validation samples.</dd>
+              <dt>Why not random pixel splitting?</dt>
+              <dd>Random splitting ignores spatial structure. Adjacent pixels end up in both train and test sets, letting the model "cheat" by memorising local patterns rather than learning generalisable relationships.</dd>
+            </dl>
+          </div>
+        </details>
 
         <div class="step-controls">
           <div class="control-group">
@@ -175,12 +209,31 @@
       <div class="step-panel__body">
         <p class="step-description">
           A single train/test split can give a misleadingly precise accuracy estimate. Instead,
-          draw <strong>B bootstrap samples</strong> of spatial blocks (with replacement).
-          For each replicate, train a Random Forest on the drawn blocks and validate on the
+          draw <strong>B
+          <span class="tech-term">bootstrap samples<span class="tech-term__tip">Bootstrap: a statistical resampling technique. Draw N items from your dataset with replacement to create a new sample of the same size, then repeat many times to estimate variability.</span></span></strong>
+          of spatial blocks (with replacement).
+          For each replicate, train a
+          <span class="tech-term">Random Forest<span class="tech-term__tip">Random Forest: a machine learning algorithm that builds many decision trees on random subsets of the data, then combines their predictions by majority vote (classification) or averaging (regression).</span></span>
+          on the drawn blocks and validate on the
           ~36.8% of blocks <em>held out for testing</em>. This produces
           <strong>B independent accuracy estimates</strong> from which distributions
-          and confidence intervals are derived &mdash; revealing how certain we can be about map quality.
+          and
+          <span class="tech-term">confidence intervals<span class="tech-term__tip">A 95% confidence interval means: if we repeated this entire process many times, 95% of the intervals would contain the true value. Wider intervals = less certainty.</span></span>
+          are derived &mdash; revealing how certain we can be about map quality.
         </p>
+        <details class="tech-detail">
+          <summary>Technical details</summary>
+          <div class="tech-detail__body">
+            <dl>
+              <dt>Bootstrap resampling</dt>
+              <dd>Each replicate draws <em>N</em> blocks with replacement from the total pool of <em>N</em> blocks. On average, ~63.2% of blocks are drawn at least once (training set); the remaining ~36.8% are out-of-bag (validation set).</dd>
+              <dt>Random Forest classifier</dt>
+              <dd>An ensemble of <code>T</code> decision trees. Each tree is trained on a bootstrap sample of the training data and a random subset of features (<code>mtry = √p</code> for classification, <code>p/3</code> for regression). Predictions are combined by majority vote or averaging.</dd>
+              <dt>Repeat assessments (B)</dt>
+              <dd>More replicates → narrower confidence intervals → more precise accuracy estimates. 100+ replicates are recommended; 20–50 suffice for quick exploration.</dd>
+            </dl>
+          </div>
+        </details>
 
         <div class="step-controls">
           <div class="control-group">
@@ -223,13 +276,36 @@
       </div>
       <div class="step-panel__body">
         <p class="step-description">
-          Distributions of accuracy metrics across all <strong>B bootstrap replicates</strong>.
+          Distributions of accuracy metrics across all <strong>B replicates</strong>.
           95% confidence intervals indicate the precision with which accuracy is known.
-          <span data-mode="categorical">Dashed line: 85% threshold (good accuracy). Class-wise user and
-            producer accuracy &ge; 85% is considered good; &ge; 95% is excellent.</span>
-          <span data-mode="continuous">Dashed lines: threshold values (R² &gt; 0.8, relative RMSE &lt; 20%).
+          <span data-mode="categorical">Dashed line: 85% threshold (good accuracy). Class-wise
+            <span class="tech-term">user's accuracy<span class="tech-term__tip">User's Accuracy (UA): Of all pixels the map labels as class X, what proportion are actually class X? Also called precision or reliability. Answers: "If the map says it's forest, can I trust that?"</span></span> and
+            <span class="tech-term">producer's accuracy<span class="tech-term__tip">Producer's Accuracy (PA): Of all pixels that truly are class X, what proportion did the map correctly identify? Also called recall or sensitivity. Answers: "How much of the real forest did the map find?"</span></span>
+            &ge; 85% is considered good; &ge; 95% is excellent.</span>
+          <span data-mode="continuous">Dashed lines: threshold values
+            (<span class="tech-term">R²<span class="tech-term__tip">Coefficient of determination: the proportion of variance in the true values explained by the model's predictions. R² = 1.0 is perfect; R² > 0.8 is generally considered good for remote sensing.</span></span> &gt; 0.8,
+            <span class="tech-term">relative RMSE<span class="tech-term__tip">Relative Root Mean Square Error: the RMSE divided by the mean of the true values, expressed as a percentage. Lower is better; < 20% is generally acceptable.</span></span> &lt; 20%).
             Confidence intervals should not cross these thresholds.</span>
         </p>
+        <details class="tech-detail">
+          <summary>Technical details</summary>
+          <div class="tech-detail__body">
+            <dl>
+              <dt>Overall accuracy</dt>
+              <dd>The proportion of all validation pixels correctly classified. A single number summary, but can be misleading if classes are imbalanced.</dd>
+              <dt>User's accuracy (precision)</dt>
+              <dd>Per-class metric: of all pixels <em>predicted</em> as class X, what fraction truly are X? Low UA = the map is labelling many non-X pixels as X (commission error / false positives).</dd>
+              <dt>Producer's accuracy (recall)</dt>
+              <dd>Per-class metric: of all pixels that <em>truly are</em> class X, what fraction did the map correctly identify? Low PA = the map is missing many X pixels (omission error / false negatives).</dd>
+              <dt>Error matrix (confusion matrix)</dt>
+              <dd>A table showing predicted vs. true class for every validation pixel. Each row is a true class; each column is a predicted class. Diagonal cells are correct; off-diagonal are errors. The basis for computing UA, PA, and overall accuracy.</dd>
+              <dt data-mode="continuous">R² (coefficient of determination)</dt>
+              <dd data-mode="continuous">Proportion of variance in the true values explained by the model. R² = 1 − (SS_res / SS_tot).</dd>
+              <dt data-mode="continuous">RMSE (Root Mean Square Error)</dt>
+              <dd data-mode="continuous">The square root of the average squared difference between predicted and true values. Same units as the response variable (Mg/ha for biomass).</dd>
+            </dl>
+          </div>
+        </details>
 
         <div id="accuracy-stats"></div>
 
@@ -302,15 +378,31 @@
             Why does this matter? Simply counting pixels per class ignores classification errors
             and gives <strong>biased area estimates</strong>. Instead, the <strong>error matrix</strong>
             from each assessment replicate is used to correct class areas
-            (Olofsson et al. 2014), producing <strong>error-corrected area estimates</strong>
+            (<span class="tech-term">Olofsson et al. 2014<span class="tech-term__tip">Olofsson et al. (2014) "Good practices for estimating area and assessing accuracy of land change" — the standard reference for error-corrected area estimation using stratified estimation with the error matrix.</span></span>),
+            producing <strong>error-corrected area estimates</strong>
             with 95% confidence intervals. Compare the corrected vs naive estimates below.
           </span>
           <span data-mode="continuous">
-            Each bootstrap replicate predicts biomass for the entire map.
+            Each replicate predicts biomass for the entire map.
             The distribution of <strong>predicted total biomass</strong> across replicates
             quantifies uncertainty, and is compared against the known true total.
           </span>
         </p>
+        <details class="tech-detail">
+          <summary>Technical details</summary>
+          <div class="tech-detail__body">
+            <dl>
+              <dt>Why not just count pixels?</dt>
+              <dd>If a map is 90% accurate and covers 1,000 km², naively counting pixels labelled "forest" ignores the 10% of pixels that are wrong. Some non-forest pixels are incorrectly labelled forest (inflating the estimate), while some real forest pixels are missed (deflating it). These errors rarely cancel out.</dd>
+              <dt>Error-corrected area estimation</dt>
+              <dd>Uses the error matrix to adjust raw pixel counts. The matrix tells us: of pixels labelled "forest", what fraction truly are forest? This correction removes systematic bias from the area estimate.</dd>
+              <dt>Confidence intervals</dt>
+              <dd>Each bootstrap replicate produces a different corrected area estimate. The distribution of these estimates gives a 95% CI showing the range within which the true area likely falls.</dd>
+              <dt>Naive area (pixel counting)</dt>
+              <dd>Shown in <span style="color:#EE6677;font-weight:600">red</span> for comparison. This is what you get if you simply count how many pixels the map assigns to each class — ignoring errors entirely.</dd>
+            </dl>
+          </div>
+        </details>
 
         <div id="summary-stats"></div>
 
@@ -326,7 +418,7 @@
             </div>
           </div>
           <div class="figure-container">
-            <div class="figure-container__title">Pixel-Level Uncertainty (Std Dev)</div>
+            <div class="figure-container__title">Pixel-Level Uncertainty <span class="tech-term">(Std Dev)<span class="tech-term__tip">Standard deviation of predictions across all bootstrap replicates for each pixel. High values (warm colours) indicate areas where the model is uncertain.</span></span></div>
             <div class="raster-canvas-wrap">
               <canvas id="canvas-uncertainty"></canvas>
             </div>
