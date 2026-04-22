@@ -756,6 +756,57 @@ body {
   to { transform: rotate(360deg); }
 }
 
+/* --- Verdict Panel --- */
+.verdict-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-size-sm);
+  margin-top: var(--space-4);
+}
+
+.verdict-table th,
+.verdict-table td {
+  padding: 10px 14px;
+  text-align: left;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.verdict-table th {
+  background: var(--bg-secondary);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.verdict-table .verdict-pass { color: #2D6A4F; font-weight: 700; }
+.verdict-table .verdict-fail { color: #C62828; font-weight: 700; }
+.verdict-table .verdict-warn { color: #E65100; font-weight: 700; }
+
+.verdict-banner {
+  padding: var(--space-4) var(--space-6);
+  border-radius: var(--border-radius);
+  font-size: var(--font-size-lg);
+  text-align: center;
+  margin-top: var(--space-4);
+}
+
+.verdict-banner--pass {
+  background: rgba(45, 106, 79, 0.12);
+  border: 2px solid #2D6A4F;
+  color: #2D6A4F;
+}
+
+.verdict-banner--fail {
+  background: rgba(198, 40, 40, 0.08);
+  border: 2px solid #C62828;
+  color: #C62828;
+}
+
+.verdict-banner--partial {
+  background: rgba(230, 81, 0, 0.08);
+  border: 2px solid #E65100;
+  color: #E65100;
+}
+
 /* --- Responsive --- */
 @media (max-width: 640px) {
   .hero { padding: var(--space-8) var(--space-4); }

@@ -131,29 +131,56 @@ const SyntheticData = (() => {
             bands[ndwiOff + i] = 0.7 * (ndwiDerived * 0.5 + 0.5) + 0.3 * bands[ndwiOff + i];
         }
 
-        return { bands, bandConfigs, width: WIDTH, height: HEIGHT };
+        // Add realistic sensor noise to each band
+        // This creates a gap between the "true" spectral values (used for ground truth)
+        // and the "observed" values (used for classification), mimicking real sensor noise
+        const noisyBands = new Float32Array(bands.length);
+        noisyBands.set(bands); // copy first
+        let noiseRng = seed + 999;
+        const noiseRand = () => { noiseRng = (noiseRng * 1664525 + 1013904223) & 0x7FFFFFFF; return noiseRng / 0x7FFFFFFF; };
+        const NOISE_LEVEL = 0.04; // 4% additive noise — enough to make boundaries fuzzy
+        for (let b = 0; b < NUM_BANDS; b++) {
+            const offset = b * totalPixels;
+            for (let i = 0; i < totalPixels; i++) {
+                noisyBands[offset + i] = bands[offset + i] + (noiseRand() - 0.5) * NOISE_LEVEL;
+            }
+        }
+
+        return { bands, noisyBands, bandConfigs, width: WIDTH, height: HEIGHT };
     }
 
-    /* --- Generate categorical ground truth (5 land cover classes) --- */
-    function generateCategoricalTruth(bands) {
+    /* --- Generate categorical ground truth (5 classes) --- */
+    // Ground truth uses CLEAN bands + a hidden environmental variable
+    // The classifier only sees NOISY bands and has no access to the environment variable
+    // This makes classification realistically imperfect
+    function generateCategoricalTruth(bands, seed) {
         const totalPixels = WIDTH * HEIGHT;
         const classes = new Uint8Array(totalPixels);
 
+        // Hidden environmental gradient — influences class assignment
+        // but is NOT available as a feature to the classifier
+        const envNoise = new PerlinNoise(seed + 500);
+
         for (let i = 0; i < totalPixels; i++) {
+            const x = i % WIDTH;
+            const y = Math.floor(i / WIDTH);
             const ndvi = bands[7 * totalPixels + i];
             const ndwi = bands[8 * totalPixels + i];
             const thermal = bands[6 * totalPixels + i];
-            const swir2 = bands[5 * totalPixels + i];
             const nir = bands[3 * totalPixels + i];
 
-            // Decision rules loosely mimicking real spectral signatures
-            if (ndwi > 0.62 && ndvi < 0.45) {
-                classes[i] = 3; // Water
-            } else if (ndvi > 0.6 && nir > 0.55) {
+            // Environment variable: soil moisture / topographic wetness
+            // Shifts thresholds, making class boundaries location-dependent
+            const env = envNoise.fbm(x * 0.004, y * 0.004, 3) * 0.08;
+
+            // Decision rules with environment-shifted thresholds
+            if (ndwi > (0.55 + env) && ndvi < (0.48 + env)) {
+                classes[i] = 3; // Water — relaxed threshold for more representation
+            } else if (ndvi > (0.55 + env) && nir > (0.53 - env)) {
                 classes[i] = 0; // Dense Forest
-            } else if (ndvi > 0.48 && nir > 0.45) {
+            } else if (ndvi > (0.47 + env) && nir > (0.44 - env)) {
                 classes[i] = 1; // Open Forest
-            } else if (ndvi > 0.35 && thermal < 0.6) {
+            } else if (ndvi > (0.35 + env) && thermal < (0.6 - env)) {
                 classes[i] = 2; // Grassland
             } else {
                 classes[i] = 4; // Bare Soil
@@ -234,11 +261,13 @@ const SyntheticData = (() => {
 
     /* --- Main generation interface --- */
     function generate(seed = 42, numTrainingPoints = 5000) {
-        const { bands, bandConfigs } = generateBands(seed);
-        const categoricalTruth = generateCategoricalTruth(bands);
+        const { bands, noisyBands, bandConfigs } = generateBands(seed);
+        // Ground truth uses CLEAN bands (true spectral values)
+        const categoricalTruth = generateCategoricalTruth(bands, seed);
         const continuousTruth = generateContinuousTruth(bands);
         const trainingIndices = samplePoints(numTrainingPoints, seed + 100);
-        const features = extractFeatures(bands, trainingIndices);
+        // Features use NOISY bands (what a real sensor would observe)
+        const features = extractFeatures(noisyBands, trainingIndices);
 
         // Compute class distribution
         const classCounts = new Uint32Array(NUM_CLASSES);
@@ -248,12 +277,13 @@ const SyntheticData = (() => {
             width: WIDTH,
             height: HEIGHT,
             numBands: NUM_BANDS,
-            bands,                 // Float32Array [NUM_BANDS * W * H]
+            bands: noisyBands,          // Noisy bands for classification (what the RF sees)
+            cleanBands: bands,           // Clean bands (for reference/display only)
             bandConfigs,
-            categoricalTruth,      // Uint8Array [W * H]
-            continuousTruth,       // Float32Array [W * H]
-            trainingIndices,       // Uint32Array [numTrainingPoints]
-            trainingFeatures: features, // Float32Array [numTrainingPoints * NUM_BANDS]
+            categoricalTruth,
+            continuousTruth,
+            trainingIndices,
+            trainingFeatures: features,
             classCounts,
             classNames: CLASS_NAMES,
             classColors: CLASS_COLORS,

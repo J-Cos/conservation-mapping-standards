@@ -143,7 +143,7 @@
 
         <div class="viz-grid viz-grid--2 mt-4">
           <div class="figure-container">
-            <div class="figure-container__title">Spatial Block Grid + OOB Example</div>
+            <div class="figure-container__title">Spatial Block Grid + Validation Blocks (held out)</div>
             <div class="raster-canvas-wrap">
               <canvas id="canvas-blocks"></canvas>
             </div>
@@ -184,7 +184,7 @@
 
         <div class="step-controls">
           <div class="control-group">
-            <label for="cfg-bootstraps">Bootstrap Replicates</label>
+            <label for="cfg-bootstraps">Repeat Assessments</label>
             <input type="number" id="cfg-bootstraps" value="100" min="10" max="5000" step="10">
           </div>
           <div class="control-group">
@@ -299,10 +299,11 @@
       <div class="step-panel__body">
         <p class="step-description">
           <span data-mode="categorical">
-            Simply counting pixels per class gives biased area estimates because it ignores
-            classification errors. Instead, the <strong>error matrix</strong> from each bootstrap
-            replicate is used to correct class areas (Olofsson et al. 2014), producing
-            <strong>error-corrected area estimates</strong> with 95% confidence intervals.
+            Why does this matter? Simply counting pixels per class ignores classification errors
+            and gives <strong>biased area estimates</strong>. Instead, the <strong>error matrix</strong>
+            from each assessment replicate is used to correct class areas
+            (Olofsson et al. 2014), producing <strong>error-corrected area estimates</strong>
+            with 95% confidence intervals. Compare the corrected vs naive estimates below.
           </span>
           <span data-mode="continuous">
             Each bootstrap replicate predicts biomass for the entire map.
@@ -332,6 +333,26 @@
             <div id="legend-uncertainty" class="mt-2"></div>
           </div>
         </div>
+      </div>
+    </article>
+
+    <!-- ────────────────────────────────────────────
+       VERDICT: Does this map meet the standard?
+       ──────────────────────────────────────────── -->
+    <article id="verdict-panel" class="step-panel hidden" data-step="verdict">
+      <div class="step-panel__header">
+        <div class="step-panel__number" style="background:var(--zsl-green-dark)">✓</div>
+        <h2 class="step-panel__title">Does This Map Meet the Standard?</h2>
+        <span class="step-panel__badge step-panel__badge--pending">Pending</span>
+      </div>
+      <div class="step-panel__body">
+        <p class="step-description">
+          The table below assesses this map against the checkpoints from
+          <strong>Table 1</strong> of the conservation mapping standard
+          (Schulte to Bühne et al., 2026).
+        </p>
+        <div id="verdict-checklist"></div>
+        <div id="verdict-summary" class="mt-4"></div>
       </div>
     </article>
 

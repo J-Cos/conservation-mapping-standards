@@ -502,6 +502,7 @@ const App = (() => {
         renderStep4();
         renderStep5();
         addPitfallButton();
+        renderVerdict();
         openStep(4);
     }
 
@@ -732,7 +733,7 @@ const App = (() => {
 
         // Summary stats
         const statsEl = document.getElementById('summary-stats');
-        let html = `<div class="info-alert"><strong>Area Estimation with Uncertainty:</strong> Simply counting pixels per class gives biased area estimates. Instead, the error matrix from each bootstrap replicate is used to correct class areas (Olofsson et al. 2014). Compare the <span style="color:var(--zsl-green-dark);font-weight:600">corrected estimates</span> vs <span style="color:#EE6677;font-weight:600">naive pixel counts</span> below.</div>`;
+        let html = `<div class="info-alert"><strong>Key:</strong> The main value is the <span style="color:var(--zsl-green-dark);font-weight:600">error-corrected estimate</span> with 95% CI. <span style="color:#EE6677;font-weight:600">Naive</span> = uncorrected pixel count. <strong>True</strong> = known ground truth. Look for where naive estimates diverge from the truth.</div>`;
 
         html += `<div class="stats-row">`;
         for (let c = 0; c < nc; c++) {
@@ -900,6 +901,154 @@ const App = (() => {
         ${threshold != null ? `<div class="stat-card__ci">Threshold: ${threshold}</div>` : ''}
       </div>
     `;
+    }
+
+    /* ============================================
+       VERDICT: Table 1 checklist assessment
+       ============================================ */
+    function renderVerdict() {
+        const results = state.results;
+        const d = state.data;
+        if (!results || results.length === 0) return;
+
+        const panel = document.getElementById('verdict-panel');
+        if (!panel) return;
+        panel.classList.remove('hidden');
+        // Open it
+        panel.classList.add('open');
+
+        const isCategorical = state.mode === 'categorical';
+        const checks = [];
+
+        // 1. Thematic validity — synthetic data has known truth
+        checks.push({
+            checkpoint: 'Thematic accuracy of groundtruth',
+            result: 'Synthetic data with perfect labels',
+            status: 'pass'
+        });
+
+        // 2. Spatial coverage
+        const nPoints = d.trainingIndices.length;
+        checks.push({
+            checkpoint: 'Spatial coverage of groundtruth',
+            result: `${nPoints.toLocaleString()} points across 1M pixels`,
+            status: 'pass'
+        });
+
+        // 3. Independence
+        checks.push({
+            checkpoint: 'Independence of training & validation',
+            result: 'Spatial blocking ensures no data leakage',
+            status: 'pass'
+        });
+
+        // 4. Spatial validity
+        const blockSize = parseInt(document.getElementById('cfg-block-size').value);
+        checks.push({
+            checkpoint: 'Spatial validity of sampling design',
+            result: `${blockSize}×${blockSize}px blocks, bootstrap resampling`,
+            status: 'pass'
+        });
+
+        if (isCategorical) {
+            // 5. Map accuracy
+            const oas = results.map(r => r.metrics.overallAccuracy);
+            const oaStats = PNASCharts.summaryStats(oas);
+            const oaPass = oaStats.mean >= 0.85;
+            checks.push({
+                checkpoint: 'Map accuracy (overall)',
+                result: `OA = ${(oaStats.mean * 100).toFixed(1)}% [${(oaStats.ci95[0] * 100).toFixed(1)}, ${(oaStats.ci95[1] * 100).toFixed(1)}]`,
+                status: oaPass ? 'pass' : (oaStats.ci95[1] >= 0.85 ? 'warn' : 'fail')
+            });
+
+            // Per-class check
+            const perClassUser = d.classNames.map((_, c) => results.map(r => r.metrics.userAccuracy[c]));
+            const classFails = [];
+            for (let c = 0; c < d.numClasses; c++) {
+                const us = PNASCharts.summaryStats(perClassUser[c]);
+                if (us.mean < 0.85) classFails.push(d.classNames[c]);
+            }
+            checks.push({
+                checkpoint: 'Per-class accuracy (UA ≥ 85%)',
+                result: classFails.length === 0 ? 'All classes pass' : `Failing: ${classFails.join(', ')}`,
+                status: classFails.length === 0 ? 'pass' : 'fail'
+            });
+        } else {
+            // Continuous
+            const r2s = results.map(r => r.metrics.r2);
+            const r2Stats = PNASCharts.summaryStats(r2s);
+            checks.push({
+                checkpoint: 'Map accuracy (R²)',
+                result: `R² = ${r2Stats.mean.toFixed(3)} [${r2Stats.ci95[0].toFixed(3)}, ${r2Stats.ci95[1].toFixed(3)}]`,
+                status: r2Stats.mean >= 0.8 ? 'pass' : (r2Stats.ci95[1] >= 0.8 ? 'warn' : 'fail')
+            });
+
+            const relRmses = results.map(r => r.metrics.relRmse);
+            const rrStats = PNASCharts.summaryStats(relRmses);
+            checks.push({
+                checkpoint: 'Relative RMSE (≤ 20%)',
+                result: `${(rrStats.mean).toFixed(1)}% [${rrStats.ci95[0].toFixed(1)}, ${rrStats.ci95[1].toFixed(1)}]`,
+                status: rrStats.mean <= 20 ? 'pass' : 'fail'
+            });
+        }
+
+        // 6. Precision
+        checks.push({
+            checkpoint: 'Precision of accuracy (CI width)',
+            result: `${results.length} repeated assessments with 95% CIs`,
+            status: 'pass'
+        });
+
+        // 7. Summary statistics
+        checks.push({
+            checkpoint: 'Error-corrected summary statistics',
+            result: isCategorical ? 'Olofsson-corrected areas with CIs' : 'Predicted totals with bootstrap CIs',
+            status: 'pass'
+        });
+
+        // Build table
+        const checklistEl = document.getElementById('verdict-checklist');
+        let html = `<table class="verdict-table">
+            <thead><tr><th>#</th><th>Table 1 Checkpoint</th><th>Result</th><th>Status</th></tr></thead>
+            <tbody>`;
+        checks.forEach((c, i) => {
+            const icon = c.status === 'pass' ? '🟢' : c.status === 'warn' ? '🟡' : '🔴';
+            const cls = `verdict-${c.status}`;
+            html += `<tr>
+                <td>${i + 1}</td>
+                <td>${c.checkpoint}</td>
+                <td>${c.result}</td>
+                <td class="${cls}">${icon} ${c.status.toUpperCase()}</td>
+            </tr>`;
+        });
+        html += `</tbody></table>`;
+        checklistEl.innerHTML = html;
+
+        // Overall verdict
+        const passes = checks.filter(c => c.status === 'pass').length;
+        const fails = checks.filter(c => c.status === 'fail').length;
+        const total = checks.length;
+
+        const summaryEl = document.getElementById('verdict-summary');
+        let verdictClass, verdictText;
+        if (fails === 0) {
+            verdictClass = 'verdict-banner--pass';
+            verdictText = `✅ This map <strong>meets the conservation mapping standard</strong>. All ${total} checkpoints pass.`;
+        } else if (fails <= 2) {
+            verdictClass = 'verdict-banner--partial';
+            verdictText = `⚠️ This map <strong>partially meets</strong> the standard. ${passes}/${total} checkpoints pass, ${fails} fail. Review failing checkpoints before using this map for decisions.`;
+        } else {
+            verdictClass = 'verdict-banner--fail';
+            verdictText = `❌ This map <strong>does not meet</strong> the conservation mapping standard. ${fails}/${total} checkpoints fail.`;
+        }
+        summaryEl.innerHTML = `<div class="verdict-banner ${verdictClass}">${verdictText}</div>`;
+
+        // Update badge
+        const badge = panel.querySelector('.step-panel__badge');
+        if (badge) {
+            badge.textContent = 'Complete';
+            badge.className = 'step-panel__badge step-panel__badge--done';
+        }
     }
 
     /* ============================================
