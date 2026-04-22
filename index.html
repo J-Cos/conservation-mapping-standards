@@ -27,10 +27,10 @@
   <section class="hero">
     <h1 class="hero__title">How Accurate Is Your Conservation Map?</h1>
     <p class="hero__desc">
-      An interactive demonstration of the full accuracy assessment pipeline for conservation maps,
-      following the Table&nbsp;1 checklist standard. Generate synthetic remote sensing data,
-      apply spatially-blocked bootstrap cross-validation with random forests, and explore
-      distributions of accuracy metrics and error-corrected summary statistics.
+      Maps without rigorous accuracy assessment risk misleading conservation decisions.
+      This interactive demonstrator accompanies the conservation mapping standard proposed by
+      Schulte to Bühne et al. (2026). Walk through the best-practice pipeline on synthetic data &mdash;
+      then see what happens when common shortcuts are taken.
     </p>
   </section>
 
@@ -54,7 +54,7 @@
       <div class="step-panel__header">
         <div class="step-panel__number">1</div>
         <h2 class="step-panel__title">Synthetic Data Generation</h2>
-        <div class="checklist-summary"><span class="check">✓</span> Thematic validity &amp; coverage</div>
+        <div class="checklist-summary"><span class="check">✓</span> Table 1: Thematic validity &amp; coverage</div>
         <span class="step-panel__badge step-panel__badge--pending">Pending</span>
         <svg class="step-panel__chevron" viewBox="0 0 20 20" fill="currentColor">
           <path fill-rule="evenodd"
@@ -63,11 +63,13 @@
       </div>
       <div class="step-panel__body">
         <p class="step-description">
-          Generate a <strong>1000×1000 pixel synthetic raster</strong> with <strong>10 spectral bands</strong>
-          exhibiting realistic spatial autocorrelation (Perlin noise with fractal Brownian motion).
+          Generate a <strong>1000×1000 pixel synthetic landscape</strong> with <strong>10 spectral bands</strong>
+          exhibiting realistic spatial patterns.
           Ground truth is defined as either <strong>5 land cover classes</strong> (categorical) or
           <strong>above-ground biomass 0–500 Mg/ha</strong> (continuous), derived from nonlinear
           combinations of the spectral bands.
+          Because this is synthetic data, we know the true answer everywhere &mdash;
+          allowing us to rigorously test how well mapping methods recover the truth.
         </p>
 
         <div class="step-controls">
@@ -112,7 +114,7 @@
       <div class="step-panel__header">
         <div class="step-panel__number">2</div>
         <h2 class="step-panel__title">Spatial Blocking &amp; Sampling Design</h2>
-        <div class="checklist-summary"><span class="check">✓</span> Spatial validity &amp; data independence</div>
+        <div class="checklist-summary"><span class="check">✓</span> Table 1: Independence &amp; spatial validity</div>
         <span class="step-panel__badge step-panel__badge--pending">Pending</span>
         <svg class="step-panel__chevron" viewBox="0 0 20 20" fill="currentColor">
           <path fill-rule="evenodd"
@@ -122,9 +124,11 @@
       <div class="step-panel__body">
         <p class="step-description">
           Divide the study area into <strong>spatial blocks</strong> to ensure training and validation
-          data independence. All sampling and cross-validation is performed at the block level.
-          Gold-highlighted blocks in the example below show <strong>out-of-bag (OOB)</strong> blocks
-          for one bootstrap iteration (~36.8% of total).
+          data are independent. Nearby pixels are similar (spatially autocorrelated), so if they
+          end up in both the training and test set, accuracy will be <em>artificially inflated</em>.
+          By grouping pixels into blocks and splitting at the block level, we prevent this data leakage.
+          Gold-highlighted blocks below are <strong>held out for validation</strong>
+          in one example iteration (~36.8% of total).
         </p>
 
         <div class="step-controls">
@@ -160,8 +164,8 @@
     <article class="step-panel" data-step="3">
       <div class="step-panel__header">
         <div class="step-panel__number">3</div>
-        <h2 class="step-panel__title">Bootstrap SCV Random Forest</h2>
-        <div class="checklist-summary"><span class="check">✓</span> Map accuracy &amp; precision</div>
+        <h2 class="step-panel__title">Repeated Cross-Validation</h2>
+        <div class="checklist-summary"><span class="check">✓</span> Table 1: Map accuracy &amp; precision</div>
         <span class="step-panel__badge step-panel__badge--pending">Pending</span>
         <svg class="step-panel__chevron" viewBox="0 0 20 20" fill="currentColor">
           <path fill-rule="evenodd"
@@ -170,11 +174,12 @@
       </div>
       <div class="step-panel__body">
         <p class="step-description">
-          Draw <strong>B bootstrap samples</strong> of spatial blocks (with replacement).
-          For each replicate, train a Random Forest on drawn blocks and validate on the
-          ~36.8% of blocks <em>not drawn</em> (out-of-bag approach). This produces
+          A single train/test split can give a misleadingly precise accuracy estimate. Instead,
+          draw <strong>B bootstrap samples</strong> of spatial blocks (with replacement).
+          For each replicate, train a Random Forest on the drawn blocks and validate on the
+          ~36.8% of blocks <em>held out for testing</em>. This produces
           <strong>B independent accuracy estimates</strong> from which distributions
-          and confidence intervals are derived.
+          and confidence intervals are derived &mdash; revealing how certain we can be about map quality.
         </p>
 
         <div class="step-controls">
@@ -209,7 +214,7 @@
       <div class="step-panel__header">
         <div class="step-panel__number">4</div>
         <h2 class="step-panel__title">Accuracy Assessment</h2>
-        <div class="checklist-summary"><span class="check">✓</span> Precision of map accuracy</div>
+        <div class="checklist-summary"><span class="check">✓</span> Table 1: Precision of map accuracy</div>
         <span class="step-panel__badge step-panel__badge--pending">Pending</span>
         <svg class="step-panel__chevron" viewBox="0 0 20 20" fill="currentColor">
           <path fill-rule="evenodd"
@@ -220,9 +225,10 @@
         <p class="step-description">
           Distributions of accuracy metrics across all <strong>B bootstrap replicates</strong>.
           95% confidence intervals indicate the precision with which accuracy is known.
-          <span data-mode="categorical">Dashed red line indicates the 85% accuracy threshold.</span>
-          <span data-mode="continuous">Dashed red line indicates threshold values (R² &gt; 0.8, rel. RMSE &lt;
-            0.2).</span>
+          <span data-mode="categorical">Dashed line: 85% threshold (good accuracy). Class-wise user and
+            producer accuracy &ge; 85% is considered good; &ge; 95% is excellent.</span>
+          <span data-mode="continuous">Dashed lines: threshold values (R² &gt; 0.8, relative RMSE &lt; 20%).
+            Confidence intervals should not cross these thresholds.</span>
         </p>
 
         <div id="accuracy-stats"></div>
@@ -245,9 +251,33 @@
         <!-- Confusion matrix (categorical only) -->
         <div data-mode="categorical" class="mt-6">
           <div class="figure-container">
-            <div class="figure-container__title" id="confmat-title">Mean Confusion Matrix</div>
+            <div class="figure-container__title" id="confmat-title">Mean Error Matrix</div>
             <div id="confusion-matrix-container"></div>
           </div>
+        </div>
+
+        <!-- Pitfall comparison panel -->
+        <div id="pitfall-comparison" class="mt-6 hidden">
+          <div class="info-alert info-alert--warning">
+            <strong>⚠️ What if we skipped spatial blocking?</strong>
+            Below: the same model evaluated with <em>random pixel-level splitting</em> instead of spatial blocks.
+            Accuracy appears much higher because spatially correlated pixels leak between training and test sets.
+          </div>
+          <div class="viz-grid viz-grid--3 mt-4">
+            <div class="figure-container">
+              <div class="figure-container__title" id="pitfall-chart1-title"></div>
+              <div class="chart-wrap"><canvas id="chart-pitfall-1"></canvas></div>
+            </div>
+            <div class="figure-container">
+              <div class="figure-container__title" id="pitfall-chart2-title"></div>
+              <div class="chart-wrap"><canvas id="chart-pitfall-2"></canvas></div>
+            </div>
+            <div class="figure-container">
+              <div class="figure-container__title" id="pitfall-chart3-title"></div>
+              <div class="chart-wrap"><canvas id="chart-pitfall-3"></canvas></div>
+            </div>
+          </div>
+          <div id="pitfall-stats" class="mt-4"></div>
         </div>
       </div>
     </article>
@@ -259,7 +289,7 @@
       <div class="step-panel__header">
         <div class="step-panel__number">5</div>
         <h2 class="step-panel__title">Summary Statistics &amp; Uncertainty</h2>
-        <div class="checklist-summary"><span class="check">✓</span> Error-corrected estimates</div>
+        <div class="checklist-summary"><span class="check">✓</span> Table 1: Error-corrected summary statistics</div>
         <span class="step-panel__badge step-panel__badge--pending">Pending</span>
         <svg class="step-panel__chevron" viewBox="0 0 20 20" fill="currentColor">
           <path fill-rule="evenodd"
@@ -269,13 +299,15 @@
       <div class="step-panel__body">
         <p class="step-description">
           <span data-mode="categorical">
-            Error-matrix-corrected <strong>area estimates</strong> with 95% confidence intervals
-            (Olofsson et al. approach). Each bootstrap replicate produces an independent error matrix
-            used to adjust raw pixel counts, accounting for classification errors.
+            Simply counting pixels per class gives biased area estimates because it ignores
+            classification errors. Instead, the <strong>error matrix</strong> from each bootstrap
+            replicate is used to correct class areas (Olofsson et al. 2014), producing
+            <strong>error-corrected area estimates</strong> with 95% confidence intervals.
           </span>
           <span data-mode="continuous">
-            Bias-corrected <strong>total biomass estimates</strong> with 95% confidence intervals.
-            Mean OOB residuals from each bootstrap are used to correct population sums.
+            Each bootstrap replicate predicts biomass for the entire map.
+            The distribution of <strong>predicted total biomass</strong> across replicates
+            quantifies uncertainty, and is compared against the known true total.
           </span>
         </p>
 
@@ -309,7 +341,8 @@
   <footer class="site-footer">
     <p>
       <strong>Conservation Mapping Standards Interactive Demonstrator</strong><br>
-      Based on the conservation mapping standard checklist (Table 1).
+      Companion to: Schulte to Bühne, H., Williams, J., Byrne, A. &amp; Pettorelli, N. (2026).
+      A mapping standard for conservation. <em>Methods in Ecology and Evolution</em>.
     </p>
     <p class="site-footer__line">
       ZSL Institute of Zoology &nbsp;|&nbsp;

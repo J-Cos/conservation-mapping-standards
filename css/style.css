@@ -657,6 +657,28 @@ body {
   color: var(--zsl-green-dark);
 }
 
+.info-alert--warning {
+  background: #FEF3C7;
+  border-left-color: #D97706;
+}
+
+.info-alert--warning strong {
+  color: #92400E;
+}
+
+/* Compare pitfall button */
+.btn-compare {
+  background: #FEF3C7;
+  color: #92400E;
+  border: 1px solid #D97706;
+  margin-top: var(--space-4);
+}
+
+.btn-compare:hover:not(:disabled) {
+  background: #FDE68A;
+  box-shadow: var(--shadow-md);
+}
+
 /* --- Checklist Table (for Table 1 reference) --- */
 .checklist-summary {
   font-size: var(--font-size-xs);

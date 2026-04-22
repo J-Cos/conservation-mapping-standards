@@ -277,7 +277,14 @@ const App = (() => {
         state.results = [];
         state.pixelSum = null;
         state.pixelSumSq = null;
+        state.pixelCount = 0;
 
+        // Hide pitfall comparison from previous run
+        const pitfallPanel = document.getElementById('pitfall-comparison');
+        if (pitfallPanel) pitfallPanel.classList.add('hidden');
+        const pitfallBtn = document.getElementById('btn-pitfall-compare');
+        if (pitfallBtn) pitfallBtn.remove();
+        
         // Destroy old charts
         Object.values(state.charts).forEach(c => PNASCharts.destroy(c));
         state.charts = {};
@@ -494,6 +501,7 @@ const App = (() => {
         markStepDone(3);
         renderStep4();
         renderStep5();
+        addPitfallButton();
         openStep(4);
     }
 
@@ -582,7 +590,7 @@ const App = (() => {
         }
 
         // Mean confusion matrix
-        document.getElementById('confmat-title').textContent = `Mean Confusion Matrix (${results.length} replicates)`;
+        document.getElementById('confmat-title').textContent = `Mean Error Matrix (${results.length} replicates)`;
         renderMeanConfusionMatrix(results, d);
     }
 
@@ -724,19 +732,29 @@ const App = (() => {
 
         // Summary stats
         const statsEl = document.getElementById('summary-stats');
-        let html = `<div class="info-alert"><strong>Area Estimation with Uncertainty:</strong> Each of the ${results.length} bootstrap replicates produces an independent map. Class areas are then corrected using the error matrix (Olofsson et al. approach). The distributions below show the uncertainty in these corrected estimates.</div>`;
+        let html = `<div class="info-alert"><strong>Area Estimation with Uncertainty:</strong> Simply counting pixels per class gives biased area estimates. Instead, the error matrix from each bootstrap replicate is used to correct class areas (Olofsson et al. 2014). Compare the <span style="color:var(--zsl-green-dark);font-weight:600">corrected estimates</span> vs <span style="color:#EE6677;font-weight:600">naive pixel counts</span> below.</div>`;
 
         html += `<div class="stats-row">`;
         for (let c = 0; c < nc; c++) {
             const stats = PNASCharts.summaryStats(correctedAreas[c]);
+            const rawStats = PNASCharts.summaryStats(rawAreas[c]);
             const truePct = (trueProps[c] * 100).toFixed(1);
             const estPct = (stats.mean / totalPixels * 100).toFixed(1);
             const ciPct = `[${(stats.ci95[0] / totalPixels * 100).toFixed(1)}, ${(stats.ci95[1] / totalPixels * 100).toFixed(1)}]`;
+            // Naive estimate: proportion of OOB predictions in this class (no error correction)
+            // This is what "counting pixels" gives you — the raw predicted class proportions
+            const meanRaw = rawAreas[c].reduce((a,b) => a+b, 0) / rawAreas[c].length;
+            // Sum all class counts for this replicate to get total OOB predictions
+            const totalOOBMean = d.classNames.reduce((sum, _, k) => {
+                return sum + rawAreas[k].reduce((a,b) => a+b, 0) / rawAreas[k].length;
+            }, 0);
+            const naivePctVal = (meanRaw / totalOOBMean * 100).toFixed(1);
             html += `
         <div class="stat-card">
           <div class="stat-card__label">${d.classNames[c]}</div>
           <div class="stat-card__value">${estPct}%</div>
           <div class="stat-card__ci">95% CI: ${ciPct}</div>
+          <div class="stat-card__ci" style="color:#EE6677">Naive: ${naivePctVal}%</div>
           <div class="stat-card__ci">True: ${truePct}%</div>
         </div>
       `;
@@ -882,6 +900,282 @@ const App = (() => {
         ${threshold != null ? `<div class="stat-card__ci">Threshold: ${threshold}</div>` : ''}
       </div>
     `;
+    }
+
+    /* ============================================
+       PITFALL COMPARISON: Random split vs Spatial blocking
+       ============================================ */
+    function addPitfallButton() {
+        // Only show if Step 4 has accuracy-stats rendered
+        const statsEl = document.getElementById('accuracy-stats');
+        if (!statsEl) return;
+
+        // Remove any existing button
+        const existing = document.getElementById('btn-pitfall-compare');
+        if (existing) existing.remove();
+
+        const btn = document.createElement('button');
+        btn.id = 'btn-pitfall-compare';
+        btn.className = 'btn btn-compare';
+        btn.textContent = '⚠️ Compare: What if we skipped spatial blocking?';
+        btn.addEventListener('click', runPitfallComparison);
+        statsEl.after(btn);
+    }
+
+    function runPitfallComparison() {
+        const btn = document.getElementById('btn-pitfall-compare');
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner"></span> Running random-split comparison…';
+        }
+
+        const d = state.data;
+        const isClassification = state.mode === 'categorical';
+        const totalPixels = d.width * d.height;
+        const nPoints = d.trainingIndices.length;
+        const numBands = d.numBands;
+
+        // Prepare all labels
+        const allLabels = isClassification
+            ? new Uint8Array(nPoints)
+            : new Float32Array(nPoints);
+        for (let i = 0; i < nPoints; i++) {
+            allLabels[i] = isClassification
+                ? d.categoricalTruth[d.trainingIndices[i]]
+                : d.continuousTruth[d.trainingIndices[i]];
+        }
+
+        // Run 20 replicates with random pixel-level splitting
+        const nPitfallReplicates = 20;
+        const pitfallResults = [];
+        let pitfallCompleted = 0;
+        const pitfallWorkers = [];
+        const numWorkers = Math.min(state.config.numWorkers, 4);
+
+        for (let w = 0; w < numWorkers; w++) {
+            const worker = new Worker('js/workers/rfWorker.js');
+            worker.onmessage = function(e) {
+                pitfallResults.push(e.data);
+                pitfallCompleted++;
+
+                const workerIdx = pitfallWorkers.indexOf(worker);
+                if (pitfallNextJob < nPitfallReplicates && workerIdx >= 0) {
+                    dispatchPitfallJob(workerIdx);
+                }
+
+                if (pitfallCompleted >= nPitfallReplicates) {
+                    pitfallWorkers.forEach(w => w.terminate());
+                    renderPitfallResults(pitfallResults);
+                }
+            };
+            pitfallWorkers.push(worker);
+        }
+
+        let pitfallNextJob = 0;
+
+        function dispatchPitfallJob(workerIdx) {
+            if (pitfallNextJob >= nPitfallReplicates) return;
+            const bIdx = pitfallNextJob++;
+
+            // Random split: randomly assign 63% to training, 37% to validation
+            // This is the "common practice" pitfall — no spatial blocking
+            const rng = mulberry32(state.config.seed + bIdx * 997);
+            const trainMask = new Uint8Array(nPoints);
+            let nTrain = 0;
+            for (let i = 0; i < nPoints; i++) {
+                if (rng() < 0.632) {
+                    trainMask[i] = 1;
+                    nTrain++;
+                }
+            }
+
+            const nOOB = nPoints - nTrain;
+            const trainFeatures = new Float32Array(nTrain * numBands);
+            const trainLabels = isClassification ? new Uint8Array(nTrain) : new Float32Array(nTrain);
+            const trainWeights = new Float32Array(nTrain).fill(1);
+            const oobFeatures = new Float32Array(nOOB * numBands);
+            const oobLabels = isClassification ? new Uint8Array(nOOB) : new Float32Array(nOOB);
+
+            let ti = 0, oi = 0;
+            for (let i = 0; i < nPoints; i++) {
+                if (trainMask[i]) {
+                    for (let b = 0; b < numBands; b++) {
+                        trainFeatures[ti * numBands + b] = d.trainingFeatures[i * numBands + b];
+                    }
+                    trainLabels[ti] = allLabels[i];
+                    ti++;
+                } else {
+                    for (let b = 0; b < numBands; b++) {
+                        oobFeatures[oi * numBands + b] = d.trainingFeatures[i * numBands + b];
+                    }
+                    oobLabels[oi] = allLabels[i];
+                    oi++;
+                }
+            }
+
+            pitfallWorkers[workerIdx].postMessage({
+                type: 'bootstrap',
+                bootstrapIndex: bIdx,
+                trainingFeatures: trainFeatures,
+                trainingLabels: trainLabels,
+                trainingWeights: trainWeights,
+                oobFeatures,
+                oobLabels,
+                fullRasterFeatures: null,
+                numBands,
+                numClasses: d.numClasses,
+                isClassification,
+                config: {
+                    nTrees: state.config.nTrees,
+                    maxDepth: state.config.maxDepth,
+                    minLeafSamples: state.config.minLeafSamples,
+                },
+                seed: state.config.seed + bIdx * 997 + 50000,
+                computeFullMap: false,
+            });
+        }
+
+        // Dispatch initial jobs
+        for (let w = 0; w < numWorkers; w++) {
+            dispatchPitfallJob(w);
+        }
+    }
+
+    // Simple seeded RNG for pitfall comparison
+    function mulberry32(a) {
+        return function() {
+            a |= 0; a = a + 0x6D2B79F5 | 0;
+            let t = Math.imul(a ^ a >>> 15, 1 | a);
+            t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+            return ((t ^ t >>> 14) >>> 0) / 4294967296;
+        };
+    }
+
+    function renderPitfallResults(pitfallResults) {
+        const btn = document.getElementById('btn-pitfall-compare');
+        if (btn) btn.remove();
+
+        const panel = document.getElementById('pitfall-comparison');
+        if (!panel) return;
+        panel.classList.remove('hidden');
+
+        const isClassification = state.mode === 'categorical';
+        const d = state.data;
+        const spatialResults = state.results;
+
+        // Destroy any existing pitfall charts
+        if (state.charts.pitfall1) PNASCharts.destroy(state.charts.pitfall1);
+        if (state.charts.pitfall2) PNASCharts.destroy(state.charts.pitfall2);
+        if (state.charts.pitfall3) PNASCharts.destroy(state.charts.pitfall3);
+
+        if (isClassification) {
+            const spatialOA = spatialResults.map(r => r.metrics.overallAccuracy);
+            const pitfallOA = pitfallResults.map(r => r.metrics.overallAccuracy);
+
+            // Chart 1: Side-by-side overall accuracy
+            document.getElementById('pitfall-chart1-title').textContent = 'Overall Accuracy: Random Split (Inflated!)';
+            state.charts.pitfall1 = PNASCharts.histogram('chart-pitfall-1', pitfallOA, {
+                xLabel: 'Overall Accuracy',
+                yLabel: 'Frequency',
+                color: '#EE6677',
+                bins: 15,
+                thresholdLine: 0.85,
+            });
+
+            // Chart 2 & 3: User/Producer accuracy comparison
+            const spatialUserStats = d.classNames.map((_, c) => PNASCharts.summaryStats(spatialResults.map(r => r.metrics.userAccuracy[c])));
+            const pitfallUserStats = d.classNames.map((_, c) => PNASCharts.summaryStats(pitfallResults.map(r => r.metrics.userAccuracy[c])));
+
+            document.getElementById('pitfall-chart2-title').textContent = "User's Accuracy: Random Split";
+            state.charts.pitfall2 = PNASCharts.boxSummary('chart-pitfall-2', pitfallUserStats, {
+                xLabels: d.classNames,
+                yLabel: 'Accuracy',
+            });
+
+            const spatialProdStats = d.classNames.map((_, c) => PNASCharts.summaryStats(spatialResults.map(r => r.metrics.producerAccuracy[c])));
+            const pitfallProdStats = d.classNames.map((_, c) => PNASCharts.summaryStats(pitfallResults.map(r => r.metrics.producerAccuracy[c])));
+
+            document.getElementById('pitfall-chart3-title').textContent = "Producer's Accuracy: Random Split";
+            state.charts.pitfall3 = PNASCharts.boxSummary('chart-pitfall-3', pitfallProdStats, {
+                xLabels: d.classNames,
+                yLabel: 'Accuracy',
+            });
+
+            // Summary comparison stats
+            const spatialOAStats = PNASCharts.summaryStats(spatialOA);
+            const pitfallOAStats = PNASCharts.summaryStats(pitfallOA);
+            const inflation = ((pitfallOAStats.mean - spatialOAStats.mean) * 100).toFixed(1);
+
+            const statsEl = document.getElementById('pitfall-stats');
+            if (statsEl) {
+                statsEl.innerHTML = `
+                    <div class="info-alert info-alert--warning">
+                        <strong>Result:</strong> Random pixel-level splitting inflated overall accuracy by
+                        <strong>+${inflation} percentage points</strong>
+                        (${(pitfallOAStats.mean * 100).toFixed(1)}% vs ${(spatialOAStats.mean * 100).toFixed(1)}% with spatial blocking).
+                        This is because nearby pixels that are very similar to each other end up in both training
+                        and test sets, making the model appear more accurate than it truly is.
+                        <strong>A map validated this way would not meet the conservation mapping standard.</strong>
+                    </div>
+                `;
+            }
+        } else {
+            // Continuous mode
+            const spatialR2 = spatialResults.map(r => r.metrics.r2);
+            const pitfallR2 = pitfallResults.map(r => r.metrics.r2);
+
+            document.getElementById('pitfall-chart1-title').textContent = 'R² Distribution: Random Split (Inflated!)';
+            state.charts.pitfall1 = PNASCharts.histogram('chart-pitfall-1', pitfallR2, {
+                xLabel: 'R²',
+                yLabel: 'Frequency',
+                color: '#EE6677',
+                bins: 15,
+                thresholdLine: 0.8,
+            });
+
+            const spatialRMSE = spatialResults.map(r => r.metrics.rmse);
+            const pitfallRMSE = pitfallResults.map(r => r.metrics.rmse);
+
+            document.getElementById('pitfall-chart2-title').textContent = 'RMSE: Random Split';
+            state.charts.pitfall2 = PNASCharts.histogram('chart-pitfall-2', pitfallRMSE, {
+                xLabel: 'RMSE (Mg/ha)',
+                yLabel: 'Frequency',
+                color: '#EE6677',
+                bins: 15,
+            });
+
+            const pitfallRelRMSE = pitfallResults.map(r => r.metrics.relRmse);
+
+            document.getElementById('pitfall-chart3-title').textContent = 'Relative RMSE: Random Split';
+            state.charts.pitfall3 = PNASCharts.histogram('chart-pitfall-3', pitfallRelRMSE, {
+                xLabel: 'Relative RMSE',
+                yLabel: 'Frequency',
+                color: '#EE6677',
+                bins: 15,
+                thresholdLine: 0.2,
+            });
+
+            const spatialR2Stats = PNASCharts.summaryStats(spatialR2);
+            const pitfallR2Stats = PNASCharts.summaryStats(pitfallR2);
+            const r2Inflation = ((pitfallR2Stats.mean - spatialR2Stats.mean) * 100).toFixed(1);
+
+            const statsEl = document.getElementById('pitfall-stats');
+            if (statsEl) {
+                statsEl.innerHTML = `
+                    <div class="info-alert info-alert--warning">
+                        <strong>Result:</strong> Random pixel-level splitting inflated R² by
+                        <strong>+${r2Inflation} percentage points</strong>
+                        (${pitfallR2Stats.mean.toFixed(3)} vs ${spatialR2Stats.mean.toFixed(3)} with spatial blocking).
+                        Without spatial blocking, the model memorises local spatial patterns rather than
+                        learning generalisable spectral-biomass relationships.
+                        <strong>A map validated this way would not meet the conservation mapping standard.</strong>
+                    </div>
+                `;
+            }
+        }
+
+        // Scroll to the pitfall panel
+        panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
     return { init };

@@ -2,7 +2,9 @@
 
 > **[Live Demo →](https://j-cos.github.io/conservation-mapping-standards/)**
 
-An interactive, browser-based demonstration of the full accuracy assessment pipeline for conservation maps, following the Table 1 checklist standard from [Olofsson et al. (2014)](https://doi.org/10.1016/j.rse.2014.02.015). Built for the ZSL Institute of Zoology.
+Companion to: **Schulte to Bühne, H., Williams, J., Byrne, A. & Pettorelli, N. (2026). A mapping standard for conservation. *Methods in Ecology and Evolution*.**
+
+An interactive, browser-based demonstrator that accompanies the proposed conservation mapping standard. Walk through the best-practice accuracy assessment pipeline on synthetic data — then see what happens when common shortcuts are taken.
 
 All computation runs **entirely in the browser** — no server, no data uploads, no dependencies to install. Open the link and click through the pipeline.
 
@@ -14,9 +16,10 @@ Conservation maps are used to make critical decisions about land protection, car
 
 1. **Generate** a realistic synthetic landscape with known ground truth
 2. **Partition** the landscape into spatial blocks to prevent data leakage
-3. **Train & evaluate** random forests with spatially-blocked bootstrap cross-validation
+3. **Train & evaluate** random forests with spatially-blocked repeated cross-validation
 4. **Assess** classification accuracy (or regression performance) with proper confidence intervals
 5. **Compute** error-corrected area/biomass estimates with uncertainty quantification
+6. **Compare** ⚠️ See what happens when spatial blocking is skipped (the "pitfall" demonstration)
 
 The tool supports two mapping modes:
 - **Categorical** — Land cover classification (5 classes: Dense Forest, Open Forest, Grassland, Water, Bare Soil)
@@ -44,7 +47,7 @@ Partitions the raster into a grid of **200×200 pixel blocks** (25 blocks). Ever
 
 This is critical because spatially proximate pixels are autocorrelated — if nearby pixels end up in both training and validation sets, accuracy will be inflated. Spatial blocking ensures that training and validation data are spatially independent.
 
-### Step 3 · Bootstrap Cross-Validation
+### Step 3 · Repeated Cross-Validation
 
 Runs *B* bootstrap replicates (default: 100), each executing in a **Web Worker** for parallel processing:
 
@@ -69,6 +72,8 @@ Aggregates metrics across all *B* replicates to produce distributions with 95% c
 | Producer's Accuracy | Per-class recall (1 − omission error)                       |
 | Confusion Matrix    | Mean counts across all replicates, with marginal accuracies |
 
+Also displayed: the **Mean Error Matrix** (manuscript terminology).
+
 **Continuous mode:**
 | Metric        | Description                                |
 | ------------- | ------------------------------------------ |
@@ -89,6 +94,24 @@ Each bootstrap replicate predicts biomass for the entire 1M-pixel raster. The di
 **Uncertainty maps:**
 - *Categorical*: Pixel-level prediction standard deviation across replicates (high values = unstable classification)
 - *Continuous*: Pixel-level biomass standard deviation (Mg/ha)
+
+### ⚠️ Pitfall Comparison: Random Split vs Spatial Blocking
+
+After the main pipeline completes, a **"Compare: What if we skipped spatial blocking?"** button appears. This runs 20 quick replicates with **random pixel-level splitting** (no spatial blocking) and displays the inflated accuracy metrics alongside the correct spatially-blocked results.
+
+This directly demonstrates the manuscript's central warning: without spatial blocking, accuracy is artificially inflated because spatially correlated pixels leak between training and test sets. The comparison includes:
+- Side-by-side accuracy distributions (red histograms for the random split)
+- A quantified inflation figure (e.g., "+5.2 percentage points")
+- A clear statement that such a map would **not meet the conservation mapping standard**
+
+### Naive vs Error-Corrected Area Estimates
+
+In Step 5 (categorical mode), each class's area is shown three ways:
+- **Corrected estimate** (Olofsson et al. approach) — the main value with 95% CI
+- **Naive pixel count** (highlighted in red) — what you'd get by simply counting pixels
+- **True area** — the known ground truth
+
+This demonstrates why "counting pixels" is dangerous and error correction is essential.
 
 ---
 
@@ -160,6 +183,7 @@ Expected output: **223 assertions, 0 failures.**
 
 ## Scientific References
 
+- **Schulte to Bühne, H., Williams, J., Byrne, A. & Pettorelli, N. (2026).** A mapping standard for conservation. *Methods in Ecology and Evolution*.
 - **Olofsson, P. et al. (2014).** Good practices for estimating area and assessing accuracy of land use change. *Remote Sensing of Environment*, 148, 42–57. [doi:10.1016/j.rse.2014.02.015](https://doi.org/10.1016/j.rse.2014.02.015)
 - **Roberts, D. R. et al. (2017).** Cross-validation strategies for data with temporal, spatial, hierarchical, or phylogenetic structure. *Ecography*, 40(8), 913–929.
 - **Breiman, L. (2001).** Random Forests. *Machine Learning*, 45(1), 5–32.
