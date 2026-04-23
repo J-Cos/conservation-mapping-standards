@@ -138,7 +138,7 @@ const SyntheticData = (() => {
         noisyBands.set(bands); // copy first
         let noiseRng = seed + 999;
         const noiseRand = () => { noiseRng = (noiseRng * 1664525 + 1013904223) & 0x7FFFFFFF; return noiseRng / 0x7FFFFFFF; };
-        const NOISE_LEVEL = 0.04; // 4% additive noise — enough to make boundaries fuzzy
+        const NOISE_LEVEL = 0.06; // 6% additive noise — realistic sensor measurement error
         for (let b = 0; b < NUM_BANDS; b++) {
             const offset = b * totalPixels;
             for (let i = 0; i < totalPixels; i++) {
@@ -171,16 +171,18 @@ const SyntheticData = (() => {
 
             // Environment variable: soil moisture / topographic wetness
             // Shifts thresholds, making class boundaries location-dependent
-            const env = envNoise.fbm(x * 0.004, y * 0.004, 3) * 0.08;
+            const env = envNoise.fbm(x * 0.004, y * 0.004, 3) * 0.06;
 
             // Decision rules with environment-shifted thresholds
-            if (ndwi > (0.55 + env) && ndvi < (0.48 + env)) {
-                classes[i] = 3; // Water — relaxed threshold for more representation
-            } else if (ndvi > (0.55 + env) && nir > (0.53 - env)) {
+            // The env variable shifts boundaries enough to cause real confusion
+            // but thresholds are set so all 5 classes maintain reasonable proportions
+            if (ndwi > (0.54 + env) && ndvi < (0.50 + env)) {
+                classes[i] = 3; // Water
+            } else if (ndvi > (0.52 + env) && nir > (0.50 - env * 0.5)) {
                 classes[i] = 0; // Dense Forest
-            } else if (ndvi > (0.47 + env) && nir > (0.44 - env)) {
+            } else if (ndvi > (0.44 + env) && nir > (0.42 - env * 0.5)) {
                 classes[i] = 1; // Open Forest
-            } else if (ndvi > (0.35 + env) && thermal < (0.6 - env)) {
+            } else if (ndvi > (0.33 + env) && thermal < (0.62 - env * 0.5)) {
                 classes[i] = 2; // Grassland
             } else {
                 classes[i] = 4; // Bare Soil
@@ -223,22 +225,41 @@ const SyntheticData = (() => {
         return biomass;
     }
 
-    /* --- Sample training/validation points --- */
+    /* --- Sample training/validation points in spatial clusters --- */
+    // Collecting data is expensive, so real-world field points are usually clustered.
+    // This clustering is exactly what causes massive data leakage if spatial blocking is skipped.
     function samplePoints(numPoints, seed = 123) {
         const points = new Uint32Array(numPoints);
+        const used = new Set();
         let rng = seed;
         const rand = () => { rng = (rng * 1664525 + 1013904223) & 0x7FFFFFFF; return rng / 0x7FFFFFFF; };
 
-        const totalPixels = WIDTH * HEIGHT;
-        const used = new Set();
+        // Define clusters to mimic field plots (e.g. 10 points per cluster)
+        const ptsPerCluster = 10;
+        const numClusters = Math.ceil(numPoints / ptsPerCluster);
 
-        for (let i = 0; i < numPoints; i++) {
-            let idx;
-            do {
-                idx = Math.floor(rand() * totalPixels);
-            } while (used.has(idx));
-            used.add(idx);
-            points[i] = idx;
+        let ptsGenerated = 0;
+        for (let c = 0; c < numClusters; c++) {
+            // Pick a random cluster center
+            const cx = Math.floor(rand() * WIDTH);
+            const cy = Math.floor(rand() * HEIGHT);
+
+            for (let p = 0; p < ptsPerCluster; p++) {
+                if (ptsGenerated >= numPoints) break;
+
+                let px, py, pt;
+                let tries = 0;
+                do {
+                    // Sample within a ~15-pixel radius (e.g., a 450m radius at 30m resolution)
+                    px = Math.min(WIDTH - 1, Math.max(0, cx + Math.floor((rand() - 0.5) * 30)));
+                    py = Math.min(HEIGHT - 1, Math.max(0, cy + Math.floor((rand() - 0.5) * 30)));
+                    pt = py * WIDTH + px;
+                    tries++;
+                } while (used.has(pt) && tries < 100);
+
+                points[ptsGenerated++] = pt;
+                used.add(pt);
+            }
         }
 
         return points;

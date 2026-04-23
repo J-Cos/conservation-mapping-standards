@@ -32,7 +32,7 @@ const App = (() => {
             maxDepth: 10,
             minLeafSamples: 5,
             blockSize: 200,
-            numTrainingPoints: 5000,
+            numTrainingPoints: 500,
             seed: 42,
             numWorkers: Math.min(navigator.hardwareConcurrency || 4, 8),
         },
@@ -81,7 +81,7 @@ const App = (() => {
             state.config.blockSize = parseInt(e.target.value) || 200;
         });
         document.getElementById('cfg-training-points').addEventListener('change', (e) => {
-            state.config.numTrainingPoints = parseInt(e.target.value) || 5000;
+            state.config.numTrainingPoints = parseInt(e.target.value) || 500;
         });
     }
 
