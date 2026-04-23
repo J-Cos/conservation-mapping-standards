@@ -1,11 +1,13 @@
 /* ============================================================
    Main Application Controller
-   Orchestrates the 5-step conservation mapping workflow:
+   Orchestrates the 7-step mapping workflow:
    1. Synthetic data generation
-   2. Spatial blocking & sampling design
-   3. Bootstrap SCV Random Forest
-   4. Accuracy assessment
-   5. Summary statistics with uncertainty
+   2. Reference Data Collection
+   3. Spatial blocking & sampling design
+   4. Bootstrap SCV Random Forest
+   5. Accuracy assessment
+   6. Summary statistics with uncertainty
+   7. Final Verdict Report Card
    ============================================================ */
 
 const App = (() => {
@@ -1174,13 +1176,13 @@ const App = (() => {
         let verdictClass, verdictText;
         if (fails === 0) {
             verdictClass = 'verdict-banner--pass';
-            verdictText = `✅ This map <strong>meets the conservation mapping standard</strong>. All ${total} checkpoints pass.`;
+            verdictText = `✅ This map <strong>meets the mapping standard</strong>. All ${total} checkpoints pass.`;
         } else if (fails <= 2) {
             verdictClass = 'verdict-banner--partial';
             verdictText = `⚠️ This map <strong>partially meets</strong> the standard. ${passes}/${total} checkpoints pass, ${fails} fail. Review failing checkpoints before using this map for decisions.`;
         } else {
             verdictClass = 'verdict-banner--fail';
-            verdictText = `❌ This map <strong>does not meet</strong> the conservation mapping standard. ${fails}/${total} checkpoints fail.`;
+            verdictText = `❌ This map <strong>does not meet</strong> the mapping standard. ${fails}/${total} checkpoints fail.`;
         }
         summaryEl.innerHTML = `<div class="verdict-banner ${verdictClass}">${verdictText}</div>`;
 
@@ -1478,7 +1480,7 @@ const App = (() => {
                         (${pitfallR2Stats.mean.toFixed(3)} vs ${spatialR2Stats.mean.toFixed(3)} with spatial blocking).
                         Without spatial blocking, the model memorises local spatial patterns rather than
                         learning generalisable spectral-biomass relationships.
-                        <strong>A map validated this way would not meet the conservation mapping standard.</strong>
+                        <strong>A map validated this way would not meet the mapping standard.</strong>
                     </div>
                 `;
             }
@@ -1566,7 +1568,7 @@ const App = (() => {
                 The full distribution spans <strong>${spread} percentage points</strong> (95% CI).
                 With only one split, you'd have no way to know where in this range your estimate falls —
                 it could easily ${oaStats.ci95[0] < 0.85 ? 'fall below the 85% pass threshold or ' : ''}
-                mislead a conservation decision.
+                mislead a real-world decision.
                 <strong>Repeated assessments are essential for knowing the precision of your accuracy estimate.</strong>
               </div>
             `;
