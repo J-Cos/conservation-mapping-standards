@@ -236,43 +236,6 @@
       </div>
     </article>
 
-    <!-- ────────────────────────────────────────────
-       STEP 7: Pedagogical Report Card
-       ──────────────────────────────────────────── -->
-    <article class="step-panel" data-step="7">
-      <div class="step-panel__header">
-        <div class="step-panel__number">7</div>
-        <h2 class="step-panel__title">Final Verdict &amp; Report Card</h2>
-        <div class="checklist-summary"><span class="check">✓</span> Evaluate mapping reliability</div>
-        <span class="step-panel__badge step-panel__badge--pending">Pending</span>
-        <svg class="step-panel__chevron" viewBox="0 0 20 20" fill="currentColor">
-          <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" />
-        </svg>
-      </div>
-      <div class="step-panel__body">
-        <!-- VERDICT REPORT CARD -->
-        <div id="report-card-panel" class="hidden" style="border: 2px solid #2D6A4F; border-radius: 8px; overflow: hidden; background: #fff; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-          <div style="background: #2D6A4F; color: #fff; padding: 12px 20px; font-weight: 700; font-size: 1.2rem; display: flex; justify-content: space-between; align-items: center;">
-            <span>Conservation Mapping Standard: Final Report Card</span>
-            <span id="report-card-grade" style="font-size: 1.5rem; background: rgba(255,255,255,0.2); padding: 4px 12px; border-radius: 4px;">PASS</span>
-          </div>
-          <div style="padding: 20px;">
-            <p style="margin-top: 0; color: #444; margin-bottom: 16px;">This summarizes the reliability of the generated map against the full known synthetic truth.</p>
-            
-            <div id="report-card-metrics" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 20px;">
-              <!-- Populated by JS -->
-            </div>
-
-            <div id="report-card-conclusion" style="background: #f8f9fa; padding: 16px; border-left: 4px solid #2D6A4F; border-radius: 4px; font-size: 0.95rem; line-height: 1.5; color: #333;">
-              <!-- Populated by JS -->
-            </div>
-          </div>
-        </div>
-        <!-- END VERDICT -->
-      </div>
-    </article>
-
-    <!-- ────────────────────────────────────────────
        STEP 4: Bootstrap SCV & Random Forest
        ──────────────────────────────────────────── -->
     <article class="step-panel" data-step="4">
@@ -556,6 +519,42 @@
           </div>
         </div>
         <!-- END REPORT CARD -->
+      </div>
+    </article>
+
+    <!-- ────────────────────────────────────────────
+       STEP 7: Pedagogical Report Card
+       ──────────────────────────────────────────── -->
+    <article class="step-panel" data-step="7">
+      <div class="step-panel__header">
+        <div class="step-panel__number" style="background:var(--zsl-green-dark)">7</div>
+        <h2 class="step-panel__title">Final Verdict &amp; Report Card</h2>
+        <div class="checklist-summary"><span class="check">✓</span> Evaluate mapping reliability</div>
+        <span class="step-panel__badge step-panel__badge--pending">Pending</span>
+        <svg class="step-panel__chevron" viewBox="0 0 20 20" fill="currentColor">
+          <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" />
+        </svg>
+      </div>
+      <div class="step-panel__body">
+        <!-- VERDICT REPORT CARD -->
+        <div id="report-card-panel" class="hidden" style="border: 2px solid #2D6A4F; border-radius: 8px; overflow: hidden; background: #fff; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+          <div style="background: #2D6A4F; color: #fff; padding: 12px 20px; font-weight: 700; font-size: 1.2rem; display: flex; justify-content: space-between; align-items: center;">
+            <span>Conservation Mapping Standard: Final Report Card</span>
+            <span id="report-card-grade" style="font-size: 1.5rem; background: rgba(255,255,255,0.2); padding: 4px 12px; border-radius: 4px;">PASS</span>
+          </div>
+          <div style="padding: 20px;">
+            <p style="margin-top: 0; color: #444; margin-bottom: 16px;">This summarizes the reliability of the generated map against the full known synthetic truth.</p>
+            
+            <div id="report-card-metrics" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 20px;">
+              <!-- Populated by JS -->
+            </div>
+
+            <div id="report-card-conclusion" style="background: #f8f9fa; padding: 16px; border-left: 4px solid #2D6A4F; border-radius: 4px; font-size: 0.95rem; line-height: 1.5; color: #333;">
+              <!-- Populated by JS -->
+            </div>
+          </div>
+        </div>
+        <!-- END VERDICT -->
       </div>
     </article>
 
