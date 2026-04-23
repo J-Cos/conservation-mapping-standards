@@ -74,6 +74,12 @@ const PNASCharts = (() => {
         // Compute histogram bins
         let min = Infinity, max = -Infinity;
         for (const v of values) { if (v < min) min = v; if (v > max) max = v; }
+        
+        if (trueLine !== null && trueLine !== undefined) {
+            if (trueLine < min) min = trueLine;
+            if (trueLine > max) max = trueLine;
+        }
+
         const binWidth = (max - min) / bins || 1;
         const counts = new Array(bins).fill(0);
         const labels = new Array(bins);
