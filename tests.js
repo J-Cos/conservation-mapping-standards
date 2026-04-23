@@ -145,7 +145,8 @@ assert(features instanceof Float32Array, 'Features should be Float32Array');
 assert(features.length === 100 * 10, 'Features should have 100 × 10 = 1000 elements');
 
 // Test: Full generate() returns all required fields
-const fullData = SyntheticData.generate(42, 100);
+const landscapeData = SyntheticData.generateLandscape(42);
+const fullData = SyntheticData.sampleReferenceData(landscapeData, 100, 'clustered', 142);
 assert(fullData.bands instanceof Float32Array, 'Full generate should include flat bands array');
 assert(fullData.bands.length === 10 * 1000000, 'bands should have 10M values');
 assert(fullData.categoricalTruth instanceof Uint8Array, 'Should include categorical truth');
@@ -465,7 +466,8 @@ console.log(`  ✓ Summary Statistics: ${passed - olofPassed} assertions passed`
 section('Integration: End-to-End Pipeline');
 
 // Generate data
-const data = SyntheticData.generate(42, 500);
+    const landData = SyntheticData.generateLandscape(123);
+    const data = SyntheticData.sampleReferenceData(landData, 1500, 'clustered', 123);
 assert(data.bands instanceof Float32Array, 'Integration: should have flat bands array');
 
 // Create blocks and assign points
@@ -564,7 +566,8 @@ assert(maxNoiseDiff < 0.5, `Max noise difference should be < 0.5 (got ${maxNoise
 assert(maxNoiseDiff > 0.001, `Should have measurable noise (got ${maxNoiseDiff.toFixed(6)})`);
 
 // Test: Full generate() returns noisy bands to the classifier
-const noisyData = SyntheticData.generate(42, 100);
+const noisyLand = SyntheticData.generateLandscape(42);
+const noisyData = SyntheticData.sampleReferenceData(noisyLand, 100, 'clustered', 142);
 assert(noisyData.bands instanceof Float32Array, 'generate() should return bands (noisy for classifier)');
 // The training features should be extracted from noisy bands
 assert(noisyData.trainingFeatures instanceof Float32Array, 'Should have training features from noisy bands');
@@ -633,7 +636,8 @@ section('Pitfall Comparison Logic');
 // We test this by training on spatially correlated data with both methods
 
 // Generate a small spatially correlated dataset
-const pitData = SyntheticData.generate(42, 2000);
+const pitLand = SyntheticData.generateLandscape(42);
+const pitData = SyntheticData.sampleReferenceData(pitLand, 2000, 'clustered', 142);
 const pitBlocks = SpatialBlocking.createBlocks(1000, 1000, 200);
 const pitBlockPoints = SpatialBlocking.assignPointsToBlocks(
     pitData.trainingIndices, pitBlocks.pixelBlockMap, pitBlocks.numBlocks
@@ -735,7 +739,8 @@ section('Single-Split vs Repeated Assessment');
 
 // Test: A single replicate's accuracy falls within the bootstrap distribution
 // Run multiple replicates and verify distribution properties
-const ssData = SyntheticData.generate(42, 1000);
+const ssLand = SyntheticData.generateLandscape(42);
+const ssData = SyntheticData.sampleReferenceData(ssLand, 1000, 'clustered', 142);
 const ssBlocks = SpatialBlocking.createBlocks(1000, 1000, 200);
 const ssBlockPoints = SpatialBlocking.assignPointsToBlocks(
     ssData.trainingIndices, ssBlocks.pixelBlockMap, ssBlocks.numBlocks
@@ -818,7 +823,8 @@ const singleSplitPassed = passed;
 section('Continuous Mode Integration');
 
 // Full pipeline with continuous (biomass) mode
-const contData = SyntheticData.generate(42, 500);
+    const landscape = SyntheticData.generateLandscape(42);
+    const contData = SyntheticData.sampleReferenceData(landscape, 500, 'clustered', 142);
 const contBlocks = SpatialBlocking.createBlocks(1000, 1000, 200);
 const contBlockPoints = SpatialBlocking.assignPointsToBlocks(
     contData.trainingIndices, contBlocks.pixelBlockMap, contBlocks.numBlocks

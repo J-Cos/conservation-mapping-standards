@@ -225,40 +225,53 @@ const SyntheticData = (() => {
         return biomass;
     }
 
-    /* --- Sample training/validation points in spatial clusters --- */
-    // Collecting data is expensive, so real-world field points are usually clustered.
-    // This clustering is exactly what causes massive data leakage if spatial blocking is skipped.
-    function samplePoints(numPoints, seed = 123) {
+    /* --- Sample training/validation points --- */
+    // Strategy: 'clustered' (mimics real field data, causes leakage if not blocked)
+    //           'random'    (true random sampling, no leakage)
+    function samplePoints(numPoints, strategy = 'clustered', seed = 123) {
         const points = new Uint32Array(numPoints);
         const used = new Set();
         let rng = seed;
         const rand = () => { rng = (rng * 1664525 + 1013904223) & 0x7FFFFFFF; return rng / 0x7FFFFFFF; };
 
-        // Define clusters to mimic field plots (e.g. 10 points per cluster)
-        const ptsPerCluster = 10;
-        const numClusters = Math.ceil(numPoints / ptsPerCluster);
-
         let ptsGenerated = 0;
-        for (let c = 0; c < numClusters; c++) {
-            // Pick a random cluster center
-            const cx = Math.floor(rand() * WIDTH);
-            const cy = Math.floor(rand() * HEIGHT);
 
-            for (let p = 0; p < ptsPerCluster; p++) {
-                if (ptsGenerated >= numPoints) break;
+        if (strategy === 'random') {
+            const totalPixels = WIDTH * HEIGHT;
+            while (ptsGenerated < numPoints) {
+                const pt = Math.floor(rand() * totalPixels);
+                if (!used.has(pt)) {
+                    points[ptsGenerated++] = pt;
+                    used.add(pt);
+                }
+            }
+        } else {
+            // Clustered
+            // Define clusters to mimic field plots (e.g. 10 points per cluster)
+            const ptsPerCluster = 10;
+            const numClusters = Math.ceil(numPoints / ptsPerCluster);
 
-                let px, py, pt;
-                let tries = 0;
-                do {
-                    // Sample within a ~15-pixel radius (e.g., a 450m radius at 30m resolution)
-                    px = Math.min(WIDTH - 1, Math.max(0, cx + Math.floor((rand() - 0.5) * 30)));
-                    py = Math.min(HEIGHT - 1, Math.max(0, cy + Math.floor((rand() - 0.5) * 30)));
-                    pt = py * WIDTH + px;
-                    tries++;
-                } while (used.has(pt) && tries < 100);
+            for (let c = 0; c < numClusters; c++) {
+                // Pick a random cluster center
+                const cx = Math.floor(rand() * WIDTH);
+                const cy = Math.floor(rand() * HEIGHT);
 
-                points[ptsGenerated++] = pt;
-                used.add(pt);
+                for (let p = 0; p < ptsPerCluster; p++) {
+                    if (ptsGenerated >= numPoints) break;
+
+                    let px, py, pt;
+                    let tries = 0;
+                    do {
+                        // Sample within a ~15-pixel radius (e.g., a 450m radius at 30m resolution)
+                        px = Math.min(WIDTH - 1, Math.max(0, cx + Math.floor((rand() - 0.5) * 30)));
+                        py = Math.min(HEIGHT - 1, Math.max(0, cy + Math.floor((rand() - 0.5) * 30)));
+                        pt = py * WIDTH + px;
+                        tries++;
+                    } while (used.has(pt) && tries < 100);
+
+                    points[ptsGenerated++] = pt;
+                    used.add(pt);
+                }
             }
         }
 
@@ -281,14 +294,11 @@ const SyntheticData = (() => {
     }
 
     /* --- Main generation interface --- */
-    function generate(seed = 42, numTrainingPoints = 5000) {
+    function generateLandscape(seed = 42) {
         const { bands, noisyBands, bandConfigs } = generateBands(seed);
         // Ground truth uses CLEAN bands (true spectral values)
         const categoricalTruth = generateCategoricalTruth(bands, seed);
         const continuousTruth = generateContinuousTruth(bands);
-        const trainingIndices = samplePoints(numTrainingPoints, seed + 100);
-        // Features use NOISY bands (what a real sensor would observe)
-        const features = extractFeatures(noisyBands, trainingIndices);
 
         // Compute class distribution
         const classCounts = new Uint32Array(NUM_CLASSES);
@@ -303,17 +313,25 @@ const SyntheticData = (() => {
             bandConfigs,
             categoricalTruth,
             continuousTruth,
-            trainingIndices,
-            trainingFeatures: features,
             classCounts,
             classNames: CLASS_NAMES,
             classColors: CLASS_COLORS,
             numClasses: NUM_CLASSES,
+            // These will be populated by sampleReferenceData
+            trainingIndices: null,
+            trainingFeatures: null,
         };
     }
 
+    function sampleReferenceData(data, numTrainingPoints = 500, strategy = 'clustered', seed = 123) {
+        data.trainingIndices = samplePoints(numTrainingPoints, strategy, seed);
+        data.trainingFeatures = extractFeatures(data.bands, data.trainingIndices);
+        return data;
+    }
+
     return {
-        generate,
+        generateLandscape,
+        sampleReferenceData,
         generateBands,
         generateCategoricalTruth,
         generateContinuousTruth,
