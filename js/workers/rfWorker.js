@@ -365,6 +365,8 @@ self.onmessage = function (e) {
             config,
             seed,
             computeFullMap,
+            trueTestFeatures,
+            trueTestLabels,
         } = msg;
 
         const rng = new SeededRNG(seed);
@@ -390,6 +392,19 @@ self.onmessage = function (e) {
             metrics = computeRegressionMetrics(oobPredictions, oobLabels);
         }
 
+        // Compute True Accuracy (against 10k population subset)
+        let trueMetrics = null;
+        if (trueTestFeatures && trueTestLabels) {
+            const nTrue = trueTestFeatures.length / numBands;
+            const trueIndices = Array.from({ length: nTrue }, (_, i) => i);
+            const truePredictions = predictForest(trees, trueTestFeatures, trueIndices, numBands, isClassification, numClasses);
+            if (isClassification) {
+                trueMetrics = computeClassificationMetrics(truePredictions, trueTestLabels, numClasses);
+            } else {
+                trueMetrics = computeRegressionMetrics(truePredictions, trueTestLabels);
+            }
+        }
+
         // Full raster prediction (optional, for generating maps)
         let fullPredictions = null;
         let totalPredictedFull = null;
@@ -411,6 +426,7 @@ self.onmessage = function (e) {
             type: 'result',
             bootstrapIndex,
             metrics,
+            trueMetrics,
             fullPredictions,
             totalPredictedFull,
             isClassification,

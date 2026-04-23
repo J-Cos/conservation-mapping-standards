@@ -295,6 +295,26 @@ const App = (() => {
         document.getElementById('btn-stop-bootstrap').classList.remove('hidden');
         markStepRunning(3);
 
+        // Create an independent 10,000 point test set from the full raster
+        // to represent the "True Population Accuracy"
+        if (!state.data.trueTestFeatures) {
+            const numTestPoints = 10000;
+            const testFeatures = new Float32Array(numTestPoints * state.data.numBands);
+            const testLabels = isClassification ? new Uint8Array(numTestPoints) : new Float32Array(numTestPoints);
+            // Deterministic RNG for reproducible test set
+            let trng = state.config.seed + 999;
+            const trand = () => { trng = (trng * 1664525 + 1013904223) & 0x7FFFFFFF; return trng / 0x7FFFFFFF; };
+            for(let i=0; i<numTestPoints; i++) {
+                const p = Math.floor(trand() * (state.data.width * state.data.height));
+                for(let b=0; b<state.data.numBands; b++) {
+                    testFeatures[i * state.data.numBands + b] = state.data.bands[b * (state.data.width * state.data.height) + p];
+                }
+                testLabels[i] = isClassification ? state.data.categoricalTruth[p] : state.data.continuousTruth[p];
+            }
+            state.data.trueTestFeatures = testFeatures;
+            state.data.trueTestLabels = testLabels;
+        }
+
         // Pre-generate bootstrap samples
         const B = state.config.numBootstraps;
         state.bootstrapSamples = SpatialBlocking.generateAllBootstraps(state.blocks.numBlocks, B, state.config.seed);
@@ -413,6 +433,8 @@ const App = (() => {
                 },
                 seed: state.config.seed + bIdx * 13,
                 computeFullMap,
+                trueTestFeatures: state.data.trueTestFeatures,
+                trueTestLabels: state.data.trueTestLabels,
             });
         }
 
@@ -545,6 +567,7 @@ const App = (() => {
 
         // Extract per-bootstrap accuracy arrays
         const overallAccuracies = results.map(r => r.metrics.overallAccuracy);
+        const trueAccuracies = results.filter(r => r.trueMetrics).map(r => r.trueMetrics.overallAccuracy);
         const perClassUser = d.classNames.map((_, c) => results.map(r => r.metrics.userAccuracy[c]));
         const perClassProducer = d.classNames.map((_, c) => results.map(r => r.metrics.producerAccuracy[c]));
 
@@ -579,12 +602,15 @@ const App = (() => {
 
         // Summary stat cards
         const oaStats = PNASCharts.summaryStats(overallAccuracies);
+        const trueOAMean = trueAccuracies.length ? (trueAccuracies.reduce((a,b)=>a+b,0)/trueAccuracies.length) : null;
+        
         const statsEl = document.getElementById('accuracy-stats');
         if (statsEl) {
             let html = `<div class="stats-row">`;
-            html += statCard('Overall Accuracy', oaStats.mean, oaStats.ci95, 0.85, true);
+            html += statCard('Overall Accuracy', oaStats.mean, oaStats.ci95, 0.85, true, false, trueOAMean);
             for (let i = 0; i < d.numClasses; i++) {
-                html += statCard(`${d.classNames[i]} (User)`, userStats[i].mean, userStats[i].ci95, 0.85, true);
+                const classTrueUser = trueAccuracies.length ? (results.reduce((sum, r) => sum + r.trueMetrics.userAccuracy[i], 0) / results.length) : null;
+                html += statCard(`${d.classNames[i]}<br><span style="font-size:0.8em; font-weight:normal;">(USER)</span>`, userStats[i].mean, userStats[i].ci95, 0.85, true, false, classTrueUser);
             }
             html += `</div>`;
             statsEl.innerHTML = html;
@@ -639,12 +665,17 @@ const App = (() => {
         const rmseStats = PNASCharts.summaryStats(rmseVals);
         const relRmseStats = PNASCharts.summaryStats(relRmseVals);
 
+        const trueAccuracies = results.filter(r => r.trueMetrics).map(r => r.trueMetrics);
+        const trueR2Mean = trueAccuracies.length ? trueAccuracies.reduce((a,b)=>a+b.r2,0)/trueAccuracies.length : null;
+        const trueRmseMean = trueAccuracies.length ? trueAccuracies.reduce((a,b)=>a+b.rmse,0)/trueAccuracies.length : null;
+        const trueRelRmseMean = trueAccuracies.length ? trueAccuracies.reduce((a,b)=>a+b.relRmse,0)/trueAccuracies.length : null;
+
         const statsEl = document.getElementById('accuracy-stats');
         if (statsEl) {
             let html = `<div class="stats-row">`;
-            html += statCard('R²', r2Stats.mean, r2Stats.ci95, 0.8, true);
-            html += statCard('RMSE', rmseStats.mean, rmseStats.ci95, null, false);
-            html += statCard('Relative RMSE', relRmseStats.mean, relRmseStats.ci95, 0.2, false, true);
+            html += statCard('R²', r2Stats.mean, r2Stats.ci95, 0.8, true, false, trueR2Mean);
+            html += statCard('RMSE', rmseStats.mean, rmseStats.ci95, null, false, false, trueRmseMean);
+            html += statCard('Relative RMSE', relRmseStats.mean, relRmseStats.ci95, 0.2, false, true, trueRelRmseMean);
             html += `</div>`;
             statsEl.innerHTML = html;
         }
@@ -879,7 +910,7 @@ const App = (() => {
     }
 
     /* --- Helper: stat card HTML --- */
-    function statCard(label, value, ci95, threshold, higherBetter, lowerBetter) {
+    function statCard(label, value, ci95, threshold, higherBetter, lowerBetter, trueValue = null) {
         let status = '';
         if (threshold !== null && threshold !== undefined) {
             if (higherBetter) {
@@ -890,8 +921,22 @@ const App = (() => {
             }
         }
 
-        const fmtVal = value < 1 ? value.toFixed(3) : value.toFixed(1);
-        const fmtCI = ci95 ? `[${ci95[0] < 1 ? ci95[0].toFixed(3) : ci95[0].toFixed(1)}, ${ci95[1] < 1 ? ci95[1].toFixed(3) : ci95[1].toFixed(1)}]` : '';
+        const fmtVal = value <= 1.0 ? value.toFixed(3) : value.toFixed(1);
+        const fmtCI = ci95 ? `[${ci95[0] <= 1.0 ? ci95[0].toFixed(3) : ci95[0].toFixed(1)}, ${ci95[1] <= 1.0 ? ci95[1].toFixed(3) : ci95[1].toFixed(1)}]` : '';
+
+        let trueHTML = '';
+        if (trueValue !== null) {
+            const tStr = trueValue <= 1.0 ? trueValue.toFixed(3) : trueValue.toFixed(1);
+            const diff = (value - trueValue);
+            // Highlight bias if it's more than 5pp (0.05 for percentages, 5.0 for absolute metrics like RMSE)
+            const biasThreshold = value <= 1.0 ? 0.05 : 5.0; 
+            const color = Math.abs(diff) > biasThreshold ? '#D32F2F' : '#666'; 
+            const diffStr = (diff >= 0 ? '+' : '') + (value <= 1.0 ? diff.toFixed(3) : diff.toFixed(1));
+            trueHTML = `<div style="font-size: 0.85rem; margin-top: 8px; padding-top: 6px; border-top: 1px solid #ddd; color: #555; line-height: 1.3;">
+                True Landscape Accuracy:<br><b>${tStr}</b> 
+                <span style="color:${color}; font-size:0.8rem;">(Bias: ${diffStr})</span>
+            </div>`;
+        }
 
         return `
       <div class="stat-card${status ? ' stat-card--' + status : ''}">
@@ -899,6 +944,7 @@ const App = (() => {
         <div class="stat-card__value">${fmtVal}</div>
         ${fmtCI ? `<div class="stat-card__ci">95% CI: ${fmtCI}</div>` : ''}
         ${threshold != null ? `<div class="stat-card__ci">Threshold: ${threshold}</div>` : ''}
+        ${trueHTML}
       </div>
     `;
     }
@@ -1194,6 +1240,8 @@ const App = (() => {
                 },
                 seed: state.config.seed + bIdx * 997 + 50000,
                 computeFullMap: false,
+                trueTestFeatures: state.data.trueTestFeatures,
+                trueTestLabels: state.data.trueTestLabels,
             });
         }
 
@@ -1266,18 +1314,22 @@ const App = (() => {
             // Summary comparison stats
             const spatialOAStats = PNASCharts.summaryStats(spatialOA);
             const pitfallOAStats = PNASCharts.summaryStats(pitfallOA);
+            const pitfallTrueAccuracies = pitfallResults.filter(r => r.trueMetrics).map(r => r.trueMetrics.overallAccuracy);
+            const trueOAMean = pitfallTrueAccuracies.length ? (pitfallTrueAccuracies.reduce((a,b)=>a+b,0)/pitfallTrueAccuracies.length) : null;
+            
             const inflation = ((pitfallOAStats.mean - spatialOAStats.mean) * 100).toFixed(1);
+            const trueText = trueOAMean !== null ? `<br><br><em>Reality Check:</em> The <b>true</b> accuracy of the map across the entire landscape was actually only <b>${(trueOAMean*100).toFixed(1)}%</b>. The spatial-blocking method safely covered this reality, but the random-split method dangerously overestimated it!` : '';
 
             const statsEl = document.getElementById('pitfall-stats');
             if (statsEl) {
                 statsEl.innerHTML = `
                     <div class="info-alert info-alert--warning">
-                        <strong>Result:</strong> Random pixel-level splitting inflated overall accuracy by
+                        <strong>Result:</strong> Random pixel-level splitting inflated the estimated accuracy by
                         <strong>+${inflation} percentage points</strong>
                         (${(pitfallOAStats.mean * 100).toFixed(1)}% vs ${(spatialOAStats.mean * 100).toFixed(1)}% with spatial blocking).
                         This is because nearby pixels that are very similar to each other end up in both training
                         and test sets, making the model appear more accurate than it truly is.
-                        <strong>A map validated this way would not meet the conservation mapping standard.</strong>
+                        ${trueText}
                     </div>
                 `;
             }
