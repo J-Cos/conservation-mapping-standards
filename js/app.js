@@ -1336,7 +1336,7 @@ const App = (() => {
                 seed: state.config.seed + bIdx * 997 + 50000,
                 computeFullMap: false,
                 trueTestFeatures: state.data.trueTestFeatures,
-                trueTestLabels: state.data.trueTestLabels,
+                trueTestLabels: isClassification ? state.data.trueTestLabelsCat : state.data.trueTestLabelsCont,
             });
         }
 
