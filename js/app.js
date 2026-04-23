@@ -153,16 +153,16 @@ const App = (() => {
             const seed = parseInt(document.getElementById('cfg-seed')?.value) || state.config.seed;
 
             state.data = SyntheticData.generateLandscape(seed);
-            renderStep3();
+            renderStep1();
 
             btn.disabled = false;
-            btn.innerHTML = '✓ Recreate Blocks';
-            markStepDone(3);
-            openStep(4);
+            btn.innerHTML = '✓ Regenerate Data';
+            markStepDone(1);
+            openStep(2);
         }, 50);
     }
 
-    function renderStep3() {
+    function renderStep1() {
         const d = state.data;
         if (!d) return;
 
@@ -601,6 +601,7 @@ const App = (() => {
         renderStep6();
         renderReportCard();
         
+        addPitfallButton();
         openStep(5);
     }
 
@@ -838,8 +839,8 @@ const App = (() => {
 
         // Render uncertainty map
         renderUncertaintyMap();
-        markStepDone(5);
         markStepDone(6);
+        openStep(7);
     }
 
     function renderCategoricalSummary() {
