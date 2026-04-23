@@ -572,6 +572,10 @@ const App = (() => {
         const perClassUser = d.classNames.map((_, c) => results.map(r => r.metrics.userAccuracy[c]));
         const perClassProducer = d.classNames.map((_, c) => results.map(r => r.metrics.producerAccuracy[c]));
 
+        // Summary stat cards
+        const oaStats = PNASCharts.summaryStats(overallAccuracies);
+        const trueOAMean = trueAccuracies.length ? (trueAccuracies.reduce((a,b)=>a+b,0)/trueAccuracies.length) : null;
+
         // Overall accuracy histogram
         PNASCharts.destroy(state.charts.overallAcc);
         document.getElementById('chart1-container-title').textContent = 'Overall Accuracy Distribution';
@@ -581,6 +585,7 @@ const App = (() => {
             color: '#2D6A4F',
             bins: 25,
             thresholdLine: 0.85,
+            trueLine: trueOAMean,
         });
 
         // Per-class user accuracy box summary
@@ -601,10 +606,6 @@ const App = (() => {
             yLabel: 'Accuracy',
         });
 
-        // Summary stat cards
-        const oaStats = PNASCharts.summaryStats(overallAccuracies);
-        const trueOAMean = trueAccuracies.length ? (trueAccuracies.reduce((a,b)=>a+b,0)/trueAccuracies.length) : null;
-        
         const statsEl = document.getElementById('accuracy-stats');
         if (statsEl) {
             let html = `<div class="stats-row">`;
@@ -629,6 +630,11 @@ const App = (() => {
         const relRmseVals = results.map(r => r.metrics.relRmse);
         const r2Vals = results.map(r => r.metrics.r2);
 
+        const trueAccuracies = results.filter(r => r.trueMetrics).map(r => r.trueMetrics);
+        const trueR2Mean = trueAccuracies.length ? trueAccuracies.reduce((a,b)=>a+b.r2,0)/trueAccuracies.length : null;
+        const trueRmseMean = trueAccuracies.length ? trueAccuracies.reduce((a,b)=>a+b.rmse,0)/trueAccuracies.length : null;
+        const trueRelRmseMean = trueAccuracies.length ? trueAccuracies.reduce((a,b)=>a+b.relRmse,0)/trueAccuracies.length : null;
+
         // R² distribution
         PNASCharts.destroy(state.charts.r2Hist);
         document.getElementById('chart1-container-title').textContent = 'R² Distribution';
@@ -638,6 +644,7 @@ const App = (() => {
             color: '#2D6A4F',
             bins: 25,
             thresholdLine: 0.8,
+            trueLine: trueR2Mean,
         });
 
         // RMSE distribution
@@ -648,6 +655,7 @@ const App = (() => {
             yLabel: 'Frequency',
             color: '#4477AA',
             bins: 25,
+            trueLine: trueRmseMean,
         });
 
         // Relative RMSE
@@ -659,17 +667,13 @@ const App = (() => {
             color: '#EE6677',
             bins: 25,
             thresholdLine: 0.2,
+            trueLine: trueRelRmseMean,
         });
 
         // Stats
         const r2Stats = PNASCharts.summaryStats(r2Vals);
         const rmseStats = PNASCharts.summaryStats(rmseVals);
         const relRmseStats = PNASCharts.summaryStats(relRmseVals);
-
-        const trueAccuracies = results.filter(r => r.trueMetrics).map(r => r.trueMetrics);
-        const trueR2Mean = trueAccuracies.length ? trueAccuracies.reduce((a,b)=>a+b.r2,0)/trueAccuracies.length : null;
-        const trueRmseMean = trueAccuracies.length ? trueAccuracies.reduce((a,b)=>a+b.rmse,0)/trueAccuracies.length : null;
-        const trueRelRmseMean = trueAccuracies.length ? trueAccuracies.reduce((a,b)=>a+b.relRmse,0)/trueAccuracies.length : null;
 
         const statsEl = document.getElementById('accuracy-stats');
         if (statsEl) {
@@ -1282,6 +1286,11 @@ const App = (() => {
         if (isClassification) {
             const spatialOA = spatialResults.map(r => r.metrics.overallAccuracy);
             const pitfallOA = pitfallResults.map(r => r.metrics.overallAccuracy);
+            
+            const spatialOAStats = PNASCharts.summaryStats(spatialOA);
+            const pitfallOAStats = PNASCharts.summaryStats(pitfallOA);
+            const pitfallTrueAccuracies = pitfallResults.filter(r => r.trueMetrics).map(r => r.trueMetrics.overallAccuracy);
+            const trueOAMean = pitfallTrueAccuracies.length ? (pitfallTrueAccuracies.reduce((a,b)=>a+b,0)/pitfallTrueAccuracies.length) : null;
 
             // Chart 1: Side-by-side overall accuracy
             document.getElementById('pitfall-chart1-title').textContent = 'Overall Accuracy: Random Split (Inflated!)';
@@ -1291,6 +1300,7 @@ const App = (() => {
                 color: '#EE6677',
                 bins: 15,
                 thresholdLine: 0.85,
+                trueLine: trueOAMean,
             });
 
             // Chart 2 & 3: User/Producer accuracy comparison
@@ -1313,11 +1323,6 @@ const App = (() => {
             });
 
             // Summary comparison stats
-            const spatialOAStats = PNASCharts.summaryStats(spatialOA);
-            const pitfallOAStats = PNASCharts.summaryStats(pitfallOA);
-            const pitfallTrueAccuracies = pitfallResults.filter(r => r.trueMetrics).map(r => r.trueMetrics.overallAccuracy);
-            const trueOAMean = pitfallTrueAccuracies.length ? (pitfallTrueAccuracies.reduce((a,b)=>a+b,0)/pitfallTrueAccuracies.length) : null;
-            
             const inflation = ((pitfallOAStats.mean - spatialOAStats.mean) * 100).toFixed(1);
             const trueText = trueOAMean !== null ? `<br><br><em>Reality Check:</em> The <b>true</b> accuracy of the map across the entire landscape was actually only <b>${(trueOAMean*100).toFixed(1)}%</b>. The spatial-blocking method safely covered this reality, but the random-split method dangerously overestimated it!` : '';
 

@@ -67,7 +67,7 @@ const PNASCharts = (() => {
     }
 
     /* --- Histogram --- */
-    function histogram(canvasId, values, { title, xLabel, yLabel, color, bins = 30, thresholdLine = null } = {}) {
+    function histogram(canvasId, values, { title, xLabel, yLabel, color, bins = 20, thresholdLine = null, trueLine = null } = {}) {
         const canvas = document.getElementById(canvasId);
         if (!canvas) return null;
 
@@ -101,7 +101,7 @@ const PNASCharts = (() => {
                 id: 'thresholdLine',
                 afterDatasetsDraw(chart) {
                     const { ctx, scales: { x } } = chart;
-                    const binIdx = Math.floor((thresholdLine - min) / binWidth);
+                    const binIdx = Math.max(0, Math.min(bins - 1, (thresholdLine - min) / binWidth));
                     const xPos = x.getPixelForValue(binIdx);
                     ctx.save();
                     ctx.strokeStyle = '#EE6677';
@@ -111,6 +111,31 @@ const PNASCharts = (() => {
                     ctx.moveTo(xPos, chart.chartArea.top);
                     ctx.lineTo(xPos, chart.chartArea.bottom);
                     ctx.stroke();
+                    ctx.restore();
+                }
+            });
+        }
+
+        if (trueLine !== undefined && trueLine !== null) {
+            plugins.push({
+                id: 'trueLine',
+                afterDatasetsDraw(chart) {
+                    const { ctx, scales: { x } } = chart;
+                    const binIdx = Math.max(0, Math.min(bins - 1, (trueLine - min) / binWidth));
+                    const xPos = x.getPixelForValue(binIdx);
+                    ctx.save();
+                    ctx.strokeStyle = '#222222';
+                    ctx.lineWidth = 3;
+                    ctx.beginPath();
+                    ctx.moveTo(xPos, chart.chartArea.top);
+                    ctx.lineTo(xPos, chart.chartArea.bottom);
+                    ctx.stroke();
+                    // Draw a label at the top
+                    ctx.fillStyle = '#222222';
+                    ctx.font = 'bold 11px Inter, sans-serif';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'bottom';
+                    ctx.fillText('TRUE', xPos, chart.chartArea.top - 4);
                     ctx.restore();
                 }
             });
