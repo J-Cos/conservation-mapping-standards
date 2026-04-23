@@ -295,6 +295,9 @@ const App = (() => {
         document.getElementById('btn-stop-bootstrap').classList.remove('hidden');
         markStepRunning(3);
 
+        const d = state.data;
+        const isClassification = state.mode === 'categorical';
+
         // Create an independent 10,000 point test set from the full raster
         // to represent the "True Population Accuracy"
         if (!state.data.trueTestFeatures) {
@@ -320,9 +323,7 @@ const App = (() => {
         state.bootstrapSamples = SpatialBlocking.generateAllBootstraps(state.blocks.numBlocks, B, state.config.seed);
 
         // Extract training data for each bootstrap
-        const d = state.data;
         const totalPixels = d.width * d.height;
-        const isClassification = state.mode === 'categorical';
 
         // Prepare labels array for training points
         const trainingLabels = isClassification
