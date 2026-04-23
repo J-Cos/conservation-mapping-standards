@@ -1,10 +1,10 @@
-# Conservation Mapping Standards — Interactive Demonstrator
+# Spatial Mapping Standards — Interactive Demonstrator
 
 > **[Live Demo →](https://j-cos.github.io/conservation-mapping-standards/)**
 
-Companion to: **Schulte to Bühne, H., Williams, J., Byrne, A. & Pettorelli, N. (2026). A mapping standard for conservation. *Methods in Ecology and Evolution*.**
+Companion to: **Schulte to Bühne, H., Williams, J., Byrne, A. & Pettorelli, N. (2026). A mapping standard for spatial data. *Methods in Ecology and Evolution*.**
 
-An interactive, browser-based demonstrator that accompanies the proposed conservation mapping standard. Walk through the best-practice accuracy assessment pipeline on synthetic data — then see what happens when common shortcuts are taken.
+An interactive, browser-based demonstrator that accompanies the proposed spatial mapping standard. Walk through the best-practice accuracy assessment pipeline on synthetic data — then see what happens when common shortcuts are taken.
 
 All computation runs **entirely in the browser** — no server, no data uploads, no dependencies to install. Open the link and click through the pipeline.
 
@@ -12,14 +12,15 @@ All computation runs **entirely in the browser** — no server, no data uploads,
 
 ## What This Demonstrator Does
 
-Conservation maps are used to make critical decisions about land protection, carbon crediting, and biodiversity monitoring. However, maps without rigorous accuracy assessment can be dangerously misleading. This tool demonstrates the *correct* way to assess map accuracy, implementing every step of the best-practice workflow:
+Spatial maps are used to make critical real-world decisions about land management, carbon crediting, and resource monitoring. However, maps without rigorous accuracy assessment can be dangerously misleading. This tool demonstrates the *correct* way to assess map accuracy, implementing every step of the best-practice workflow:
 
 1. **Generate** a realistic synthetic landscape with known ground truth
-2. **Partition** the landscape into spatial blocks to prevent data leakage
-3. **Train & evaluate** random forests with spatially-blocked repeated cross-validation
-4. **Assess** classification accuracy (or regression performance) with proper confidence intervals
-5. **Compute** error-corrected area/biomass estimates with uncertainty quantification
-6. **Compare** ⚠️ See what happens when spatial blocking is skipped (the "pitfall" demonstration)
+2. **Collect** reference data (simulating field surveys with clustered or random strategies)
+3. **Partition** the landscape into spatial blocks to prevent data leakage
+4. **Train & evaluate** random forests with spatially-blocked repeated cross-validation
+5. **Assess** classification accuracy (or regression performance) with proper confidence intervals
+6. **Compute** error-corrected area/biomass estimates with uncertainty quantification
+7. **Score** the final map against the standard via an automated report card
 
 The tool supports two mapping modes:
 - **Categorical** — Land cover classification (5 classes: Dense Forest, Open Forest, Grassland, Water, Bare Soil)
@@ -27,7 +28,7 @@ The tool supports two mapping modes:
 
 ---
 
-## The 5-Step Pipeline
+## The 7-Step Pipeline
 
 ### Step 1 · Synthetic Data Generation
 
@@ -39,15 +40,23 @@ Generates a 1000×1000 pixel, 10-band synthetic raster with realistic spatial st
 
 Training points are sampled randomly across the raster, and their spectral feature vectors are extracted.
 
-**Key parameters:** Random seed (default: 42), number of training points (default: 5,000).
+**Key parameters:** Random seed (default: 42).
 
-### Step 2 · Spatial Blocking
+### Step 2 · Reference Data Collection
+
+Simulates field data collection by sampling training points from the generated landscape. 
+
+**Sampling Strategies:**
+- **Clustered (Realistic):** Mimics real-world field plots, selecting points in spatially autocorrelated clusters.
+- **Random (Ideal):** Selects completely independent random pixels across the landscape.
+
+### Step 3 · Spatial Blocking
 
 Partitions the raster into a grid of **200×200 pixel blocks** (25 blocks). Every training point is assigned to its containing block.
 
 This is critical because spatially proximate pixels are autocorrelated — if nearby pixels end up in both training and validation sets, accuracy will be inflated. Spatial blocking ensures that training and validation data are spatially independent.
 
-### Step 3 · Repeated Cross-Validation
+### Step 4 · Repeated Cross-Validation
 
 Runs *B* bootstrap replicates (default: 100), each executing in a **Web Worker** for parallel processing:
 
@@ -60,7 +69,7 @@ Each replicate yields a complete set of accuracy metrics and a full prediction m
 
 **Parallelisation:** The app detects available CPU cores and spawns one Web Worker per core (capped at 8). Trees within each replicate are built using a seeded LCG random number generator for reproducibility.
 
-### Step 4 · Accuracy Assessment
+### Step 5 · Accuracy Assessment
 
 Aggregates metrics across all *B* replicates to produce distributions with 95% confidence intervals:
 
@@ -83,7 +92,7 @@ Also displayed: the **Mean Error Matrix** (manuscript terminology).
 
 All distributions are rendered as histograms with reference threshold lines (0.85 for accuracy, 0.80 for R²).
 
-### Step 5 · Summary Statistics & Uncertainty
+### Step 6 · Summary Statistics & Uncertainty
 
 **Categorical — Olofsson area correction:**
 Applies the [Olofsson et al. (2014)](https://doi.org/10.1016/j.rse.2014.02.015) error-adjusted area estimation. The confusion matrix is converted to proportions, and map class areas are corrected for commission and omission errors. Confidence intervals are derived from the bootstrap distribution of corrected areas.
@@ -95,6 +104,10 @@ Each bootstrap replicate predicts biomass for the entire 1M-pixel raster. The di
 - *Categorical*: Pixel-level prediction standard deviation across replicates (high values = unstable classification)
 - *Continuous*: Pixel-level biomass standard deviation (Mg/ha)
 
+### Step 7 · Final Verdict & Report Card
+
+Compares the internal cross-validation accuracy estimate against the **True Landscape Accuracy** (calculated across an independent 10,000-pixel evaluation set). This provides a final letter grade and clear feedback on whether the sampling and validation strategy successfully avoided data leakage and overestimation.
+
 ### ⚠️ Pitfall Comparison: Random Split vs Spatial Blocking
 
 After the main pipeline completes, a **"Compare: What if we skipped spatial blocking?"** button appears. This runs 20 quick replicates with **random pixel-level splitting** (no spatial blocking) and displays the inflated accuracy metrics alongside the correct spatially-blocked results.
@@ -102,11 +115,11 @@ After the main pipeline completes, a **"Compare: What if we skipped spatial bloc
 This directly demonstrates the manuscript's central warning: without spatial blocking, accuracy is artificially inflated because spatially correlated pixels leak between training and test sets. The comparison includes:
 - Side-by-side accuracy distributions (red histograms for the random split)
 - A quantified inflation figure (e.g., "+5.2 percentage points")
-- A clear statement that such a map would **not meet the conservation mapping standard**
+- A clear statement that such a map would **not meet the mapping standard**
 
 ### Naive vs Error-Corrected Area Estimates
 
-In Step 5 (categorical mode), each class's area is shown three ways:
+In Step 6 (categorical mode), each class's area is shown three ways:
 - **Corrected estimate** (Olofsson et al. approach) — the main value with 95% CI
 - **Naive pixel count** (highlighted in red) — what you'd get by simply counting pixels
 - **True area** — the known ground truth
@@ -188,7 +201,7 @@ Expected output: **267 assertions, 0 failures.**
 
 ## Scientific References
 
-- **Schulte to Bühne, H., Williams, J., Byrne, A. & Pettorelli, N. (2026).** A mapping standard for conservation. *Methods in Ecology and Evolution*.
+- **Schulte to Bühne, H., Williams, J., Byrne, A. & Pettorelli, N. (2026).** A mapping standard for spatial data. *Methods in Ecology and Evolution*.
 - **Olofsson, P. et al. (2014).** Good practices for estimating area and assessing accuracy of land use change. *Remote Sensing of Environment*, 148, 42–57. [doi:10.1016/j.rse.2014.02.015](https://doi.org/10.1016/j.rse.2014.02.015)
 - **Roberts, D. R. et al. (2017).** Cross-validation strategies for data with temporal, spatial, hierarchical, or phylogenetic structure. *Ecography*, 40(8), 913–929.
 - **Breiman, L. (2001).** Random Forests. *Machine Learning*, 45(1), 5–32.
