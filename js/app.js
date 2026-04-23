@@ -509,7 +509,7 @@ const App = (() => {
                 seed: state.config.seed + bIdx * 13,
                 computeFullMap,
                 trueTestFeatures: state.data.trueTestFeatures,
-                trueTestLabels: state.data.trueTestLabels,
+                trueTestLabels: isClassification ? state.data.trueTestLabelsCat : state.data.trueTestLabelsCont,
             });
         }
 
@@ -840,7 +840,6 @@ const App = (() => {
         // Render uncertainty map
         renderUncertaintyMap();
         markStepDone(6);
-        openStep(7);
     }
 
     function renderCategoricalSummary() {
@@ -1728,6 +1727,8 @@ const App = (() => {
         metricsEl.innerHTML = html;
         conclusionEl.innerHTML = conclusion;
         gradeEl.textContent = grade;
+        
+        markStepDone(7);
     }
 
     return { init };

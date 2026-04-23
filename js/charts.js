@@ -147,6 +147,7 @@ const PNASCharts = (() => {
             options: {
                 responsive: true,
                 maintainAspectRatio: true,
+                layout: { padding: { top: 15 } },
                 plugins: {
                     legend: { display: false },
                     title: { display: !!title, text: title, font: { size: 13, weight: '700' }, padding: { bottom: 12 } },

@@ -304,6 +304,32 @@ const SyntheticData = (() => {
         const classCounts = new Uint32Array(NUM_CLASSES);
         for (let i = 0; i < categoricalTruth.length; i++) classCounts[categoricalTruth[i]]++;
 
+        // Generate a 10,000-pixel independent test set for "True Landscape Accuracy"
+        const numTrueTest = 10000;
+        const trueTestIndices = new Uint32Array(numTrueTest);
+        let trng = 9999;
+        const trand = () => { trng = (trng * 1664525 + 1013904223) & 0x7FFFFFFF; return trng / 0x7FFFFFFF; };
+        for (let i = 0; i < numTrueTest; i++) {
+            trueTestIndices[i] = Math.floor(trand() * (WIDTH * HEIGHT));
+        }
+        
+        // Extract features directly within the function
+        const trueTestFeatures = new Float32Array(numTrueTest * NUM_BANDS);
+        const totalPixels = WIDTH * HEIGHT;
+        for (let i = 0; i < numTrueTest; i++) {
+            const px = trueTestIndices[i];
+            for (let b = 0; b < NUM_BANDS; b++) {
+                trueTestFeatures[i * NUM_BANDS + b] = noisyBands[b * totalPixels + px];
+            }
+        }
+        
+        const trueTestLabelsCat = new Uint8Array(numTrueTest);
+        const trueTestLabelsCont = new Float32Array(numTrueTest);
+        for(let i=0; i<numTrueTest; i++) {
+            trueTestLabelsCat[i] = categoricalTruth[trueTestIndices[i]];
+            trueTestLabelsCont[i] = continuousTruth[trueTestIndices[i]];
+        }
+
         return {
             width: WIDTH,
             height: HEIGHT,
@@ -317,6 +343,9 @@ const SyntheticData = (() => {
             classNames: CLASS_NAMES,
             classColors: CLASS_COLORS,
             numClasses: NUM_CLASSES,
+            trueTestFeatures,
+            trueTestLabelsCat,
+            trueTestLabelsCont,
             // These will be populated by sampleReferenceData
             trainingIndices: null,
             trainingFeatures: null,
