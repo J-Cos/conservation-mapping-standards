@@ -534,6 +534,348 @@ const intCorrectedSum = intCorrected.reduce((a, b) => a + b, 0);
 assertApprox(intCorrectedSum, 1000000, 100, 'Corrected areas should sum to ≈1M');
 
 console.log(`  ✓ Integration: pipeline completed successfully`);
+const integrationPassed = passed;
+
+// ══════════════════════════════════════════════════════════════
+//  8. SENSOR NOISE & HIDDEN GRADIENT TESTS
+// ══════════════════════════════════════════════════════════════
+section('Sensor Noise & Hidden Gradient');
+
+// Test: generateBands returns both clean and noisy bands
+const noisyResult = SyntheticData.generateBands(42);
+assert(noisyResult.bands instanceof Float32Array, 'Should have clean bands');
+assert(noisyResult.noisyBands instanceof Float32Array, 'Should have noisy bands');
+assert(noisyResult.noisyBands.length === noisyResult.bands.length, 'Noisy and clean bands should have same length');
+
+// Test: Noisy bands should differ from clean bands
+let noiseDiffs = 0;
+for (let i = 0; i < 1000; i++) {
+    if (noisyResult.noisyBands[i] !== noisyResult.bands[i]) noiseDiffs++;
+}
+assert(noiseDiffs > 500, `Most noisy band values should differ from clean (${noiseDiffs}/1000 differed)`);
+
+// Test: Noise magnitude is reasonable (not too large)
+let maxNoiseDiff = 0;
+for (let i = 0; i < 10000; i++) {
+    const diff = Math.abs(noisyResult.noisyBands[i] - noisyResult.bands[i]);
+    if (diff > maxNoiseDiff) maxNoiseDiff = diff;
+}
+assert(maxNoiseDiff < 0.5, `Max noise difference should be < 0.5 (got ${maxNoiseDiff.toFixed(4)})`);
+assert(maxNoiseDiff > 0.001, `Should have measurable noise (got ${maxNoiseDiff.toFixed(6)})`);
+
+// Test: Full generate() returns noisy bands to the classifier
+const noisyData = SyntheticData.generate(42, 100);
+assert(noisyData.bands instanceof Float32Array, 'generate() should return bands (noisy for classifier)');
+// The training features should be extracted from noisy bands
+assert(noisyData.trainingFeatures instanceof Float32Array, 'Should have training features from noisy bands');
+
+// Test: Categorical class distribution is realistic (Water ≥ 1%)
+const catTruthFull = noisyData.categoricalTruth;
+const classCounts = new Uint32Array(5);
+for (let i = 0; i < catTruthFull.length; i++) classCounts[catTruthFull[i]]++;
+const waterPct = (classCounts[3] / catTruthFull.length * 100);
+assert(waterPct >= 1.0, `Water class should be >= 1% of landscape (got ${waterPct.toFixed(2)}%)`);
+assert(waterPct < 10, `Water class should be < 10% (got ${waterPct.toFixed(2)}%)`);
+
+// Test: All 5 classes should be present
+for (let c = 0; c < 5; c++) {
+    assert(classCounts[c] > 0, `Class ${c} (${SyntheticData.CLASS_NAMES[c]}) should have > 0 pixels (got ${classCounts[c]})`);
+}
+
+// Test: No single class should dominate > 60% (realistic landscape)
+for (let c = 0; c < 5; c++) {
+    const pct = classCounts[c] / catTruthFull.length * 100;
+    assert(pct < 60, `Class ${c} should not exceed 60% (got ${pct.toFixed(1)}%)`);
+}
+
+console.log(`  ✓ Sensor Noise & Hidden Gradient: ${passed - integrationPassed} assertions passed`);
+const noisePassed = passed;
+
+// ══════════════════════════════════════════════════════════════
+//  9. CONTINUOUS MODE REGRESSION METRICS TESTS
+// ══════════════════════════════════════════════════════════════
+section('Continuous Mode Metrics');
+
+// Test: relRmse is computed correctly
+const contPred = new Float32Array([10, 20, 30, 40, 50]);
+const contObs = new Float32Array([12, 18, 33, 38, 52]);
+const contMetrics = RF.computeRegressionMetrics(contPred, contObs);
+
+assert(contMetrics.rmse !== undefined, 'Should compute RMSE');
+assert(contMetrics.r2 !== undefined, 'Should compute R²');
+assert(contMetrics.relRmse !== undefined, 'Should compute relative RMSE');
+
+// RMSE = sqrt(mean((pred-obs)²)) = sqrt(mean([4,4,9,4,4])) = sqrt(5) ≈ 2.236
+const expectedContRMSE = Math.sqrt((4 + 4 + 9 + 4 + 4) / 5);
+assertApprox(contMetrics.rmse, expectedContRMSE, 0.01, `RMSE should be ≈${expectedContRMSE.toFixed(3)}`);
+
+// relRmse = RMSE / mean(obs)
+const meanObs = (12 + 18 + 33 + 38 + 52) / 5; // = 30.6
+const expectedRelRMSE = expectedContRMSE / meanObs;
+assertApprox(contMetrics.relRmse, expectedRelRMSE, 0.01, `Relative RMSE should be ≈${expectedRelRMSE.toFixed(4)}`);
+
+// Test: R² is high for good predictions
+assert(contMetrics.r2 > 0.9, `R² should be > 0.9 for close predictions (got ${contMetrics.r2.toFixed(3)})`);
+
+// Test: totalPredicted is the sum of predictions
+assertApprox(contMetrics.totalPredicted, 150, 1e-4, 'Total predicted should be 150');
+
+console.log(`  ✓ Continuous Mode Metrics: ${passed - noisePassed} assertions passed`);
+const contModePassed = passed;
+
+// ══════════════════════════════════════════════════════════════
+//  10. PITFALL COMPARISON LOGIC TESTS
+// ══════════════════════════════════════════════════════════════
+section('Pitfall Comparison Logic');
+
+// Test: Random-split validation should show higher accuracy than spatial blocking
+// on spatially autocorrelated data (the core pitfall)
+// We test this by training on spatially correlated data with both methods
+
+// Generate a small spatially correlated dataset
+const pitData = SyntheticData.generate(42, 2000);
+const pitBlocks = SpatialBlocking.createBlocks(1000, 1000, 200);
+const pitBlockPoints = SpatialBlocking.assignPointsToBlocks(
+    pitData.trainingIndices, pitBlocks.pixelBlockMap, pitBlocks.numBlocks
+);
+
+// Method 1: Spatial blocking (correct)
+const spatialBS = SpatialBlocking.bootstrapSample(pitBlocks.numBlocks, 42);
+const spatialTrain = SpatialBlocking.getTrainingData(spatialBS.blockWeights, pitBlockPoints);
+
+// Get OOB points for spatial
+const spatialOOBPoints = [];
+for (const block of spatialBS.oobBlocks) {
+    if (pitBlockPoints[block]) {
+        for (const ptIdx of pitBlockPoints[block]) spatialOOBPoints.push(ptIdx);
+    }
+}
+
+const spatialTrainF = new Float32Array(spatialTrain.indices.length * 10);
+const spatialTrainL = new Uint8Array(spatialTrain.indices.length);
+for (let i = 0; i < spatialTrain.indices.length; i++) {
+    const ptIdx = spatialTrain.indices[i];
+    for (let b = 0; b < 10; b++) spatialTrainF[i * 10 + b] = pitData.trainingFeatures[ptIdx * 10 + b];
+    spatialTrainL[i] = pitData.categoricalTruth[pitData.trainingIndices[ptIdx]];
+}
+
+const spatialOOBF = new Float32Array(spatialOOBPoints.length * 10);
+const spatialOOBL = new Uint8Array(spatialOOBPoints.length);
+for (let i = 0; i < spatialOOBPoints.length; i++) {
+    const ptIdx = spatialOOBPoints[i];
+    for (let b = 0; b < 10; b++) spatialOOBF[i * 10 + b] = pitData.trainingFeatures[ptIdx * 10 + b];
+    spatialOOBL[i] = pitData.categoricalTruth[pitData.trainingIndices[ptIdx]];
+}
+
+const pitConfig = { nTrees: 30, maxDepth: 10, minLeafSamples: 5, mtry: 3 };
+const pitRng1 = new RF.SeededRNG(42);
+const spatialTrees = RF.trainForest(spatialTrainF, spatialTrainL, spatialTrain.weights,
+    spatialTrain.indices.length, 10, pitConfig, pitRng1, true);
+const spatialPred = RF.predictForest(spatialTrees, spatialOOBF,
+    Array.from({ length: spatialOOBPoints.length }, (_, i) => i), 10, true, 5);
+const spatialMetrics = RF.computeClassificationMetrics(spatialPred, spatialOOBL, 5);
+
+// Method 2: Random pixel-level split
+// Use same total points but split randomly
+const nPitPoints = 2000;
+const allPitFeatures = pitData.trainingFeatures;
+const allPitLabels = new Uint8Array(nPitPoints);
+for (let i = 0; i < nPitPoints; i++) {
+    allPitLabels[i] = pitData.categoricalTruth[pitData.trainingIndices[i]];
+}
+
+// Random 63/37 split
+const randTrainF = new Float32Array(Math.floor(nPitPoints * 0.632) * 10);
+const randTrainL = new Uint8Array(Math.floor(nPitPoints * 0.632));
+const randTrainW = new Float32Array(Math.floor(nPitPoints * 0.632)).fill(1);
+const randOOBF = new Float32Array(Math.ceil(nPitPoints * 0.368) * 10);
+const randOOBL = new Uint8Array(Math.ceil(nPitPoints * 0.368));
+
+let rTi = 0, rOi = 0;
+const pitRng3 = new RF.SeededRNG(42);
+for (let i = 0; i < nPitPoints; i++) {
+    if (pitRng3.next() < 0.632 && rTi < randTrainL.length) {
+        for (let b = 0; b < 10; b++) randTrainF[rTi * 10 + b] = allPitFeatures[i * 10 + b];
+        randTrainL[rTi] = allPitLabels[i];
+        rTi++;
+    } else if (rOi < randOOBL.length) {
+        for (let b = 0; b < 10; b++) randOOBF[rOi * 10 + b] = allPitFeatures[i * 10 + b];
+        randOOBL[rOi] = allPitLabels[i];
+        rOi++;
+    }
+}
+
+const pitRng2 = new RF.SeededRNG(42);
+const randTrees = RF.trainForest(randTrainF, randTrainL, randTrainW, rTi, 10, pitConfig, pitRng2, true);
+const randPred = RF.predictForest(randTrees, randOOBF,
+    Array.from({ length: rOi }, (_, i) => i), 10, true, 5);
+const randMetrics = RF.computeClassificationMetrics(randPred, randOOBL, 5);
+
+// Random split should generally show >= spatial blocking accuracy
+// (because data leakage inflates it)
+assert(spatialMetrics.overallAccuracy > 0.4,
+    `Spatial OA should be > 40% (got ${(spatialMetrics.overallAccuracy * 100).toFixed(1)}%)`);
+assert(randMetrics.overallAccuracy > 0.4,
+    `Random OA should be > 40% (got ${(randMetrics.overallAccuracy * 100).toFixed(1)}%)`);
+
+// The inflation effect: random split should be >= spatial blocking
+// (this is the paper's core claim; with autocorrelated data it's almost always true)
+const pitfallInflation = randMetrics.overallAccuracy - spatialMetrics.overallAccuracy;
+assert(pitfallInflation >= -0.05,
+    `Random split should not be much worse than spatial (inflation=${(pitfallInflation * 100).toFixed(1)}pp)`);
+
+console.log(`  ✓ Pitfall Comparison: ${passed - contModePassed} assertions passed`);
+console.log(`    Spatial OA: ${(spatialMetrics.overallAccuracy * 100).toFixed(1)}%, Random OA: ${(randMetrics.overallAccuracy * 100).toFixed(1)}%, Inflation: ${(pitfallInflation * 100).toFixed(1)}pp`);
+const pitfallPassed = passed;
+
+// ══════════════════════════════════════════════════════════════
+//  11. SINGLE-SPLIT vs REPEATED ASSESSMENT TESTS
+// ══════════════════════════════════════════════════════════════
+section('Single-Split vs Repeated Assessment');
+
+// Test: A single replicate's accuracy falls within the bootstrap distribution
+// Run multiple replicates and verify distribution properties
+const ssData = SyntheticData.generate(42, 1000);
+const ssBlocks = SpatialBlocking.createBlocks(1000, 1000, 200);
+const ssBlockPoints = SpatialBlocking.assignPointsToBlocks(
+    ssData.trainingIndices, ssBlocks.pixelBlockMap, ssBlocks.numBlocks
+);
+
+const nReps = 20;
+const oaValues = [];
+
+for (let rep = 0; rep < nReps; rep++) {
+    const bs = SpatialBlocking.bootstrapSample(ssBlocks.numBlocks, rep * 100);
+    const td = SpatialBlocking.getTrainingData(bs.blockWeights, ssBlockPoints);
+
+    const oobPts = [];
+    for (const block of bs.oobBlocks) {
+        if (ssBlockPoints[block]) {
+            for (const ptIdx of ssBlockPoints[block]) oobPts.push(ptIdx);
+        }
+    }
+    if (oobPts.length === 0 || td.indices.length === 0) continue;
+
+    const tF = new Float32Array(td.indices.length * 10);
+    const tL = new Uint8Array(td.indices.length);
+    for (let i = 0; i < td.indices.length; i++) {
+        const ptIdx = td.indices[i];
+        for (let b = 0; b < 10; b++) tF[i * 10 + b] = ssData.trainingFeatures[ptIdx * 10 + b];
+        tL[i] = ssData.categoricalTruth[ssData.trainingIndices[ptIdx]];
+    }
+
+    const oF = new Float32Array(oobPts.length * 10);
+    const oL = new Uint8Array(oobPts.length);
+    for (let i = 0; i < oobPts.length; i++) {
+        const ptIdx = oobPts[i];
+        for (let b = 0; b < 10; b++) oF[i * 10 + b] = ssData.trainingFeatures[ptIdx * 10 + b];
+        oL[i] = ssData.categoricalTruth[ssData.trainingIndices[ptIdx]];
+    }
+
+    const rng = new RF.SeededRNG(rep);
+    const trees = RF.trainForest(tF, tL, td.weights, td.indices.length, 10,
+        { nTrees: 15, maxDepth: 10, minLeafSamples: 5, mtry: 3 }, rng, true);
+    const pred = RF.predictForest(trees, oF, Array.from({ length: oobPts.length }, (_, i) => i), 10, true, 5);
+    const m = RF.computeClassificationMetrics(pred, oL, 5);
+    oaValues.push(m.overallAccuracy);
+}
+
+assert(oaValues.length >= 15, `Should complete at least 15 replicates (got ${oaValues.length})`);
+
+// Test: Distribution should have meaningful spread
+const ssStats = PNASCharts.summaryStats(oaValues);
+const ssSpread = ssStats.ci95[1] - ssStats.ci95[0];
+assert(ssSpread > 0.01, `95% CI spread should be > 1pp (got ${(ssSpread * 100).toFixed(1)}pp)`);
+
+// Test: A single replicate should fall within the distribution range
+const singleOA = oaValues[0];
+const minOA = Math.min(...oaValues);
+const maxOA = Math.max(...oaValues);
+assert(singleOA >= minOA && singleOA <= maxOA, 'Single replicate should be within distribution range');
+
+// Test: The single value alone tells you nothing about CI width
+// This is what the interface demonstrates: one number vs a distribution
+assert(ssStats.ci95[0] < ssStats.mean, 'CI lower should be below mean');
+assert(ssStats.ci95[1] > ssStats.mean, 'CI upper should be above mean');
+
+// Test: Some replicates should differ meaningfully from each other
+let maxDiff = 0;
+for (let i = 0; i < oaValues.length; i++) {
+    for (let j = i + 1; j < oaValues.length; j++) {
+        const d = Math.abs(oaValues[i] - oaValues[j]);
+        if (d > maxDiff) maxDiff = d;
+    }
+}
+assert(maxDiff > 0.01, `Max pairwise OA difference should be > 1pp (got ${(maxDiff * 100).toFixed(1)}pp)`);
+
+console.log(`  ✓ Single-Split vs Repeated: ${passed - pitfallPassed} assertions passed`);
+console.log(`    Mean OA: ${(ssStats.mean * 100).toFixed(1)}%, 95% CI: [${(ssStats.ci95[0] * 100).toFixed(1)}, ${(ssStats.ci95[1] * 100).toFixed(1)}], Spread: ${(ssSpread * 100).toFixed(1)}pp`);
+const singleSplitPassed = passed;
+
+// ══════════════════════════════════════════════════════════════
+//  12. CONTINUOUS MODE INTEGRATION TEST
+// ══════════════════════════════════════════════════════════════
+section('Continuous Mode Integration');
+
+// Full pipeline with continuous (biomass) mode
+const contData = SyntheticData.generate(42, 500);
+const contBlocks = SpatialBlocking.createBlocks(1000, 1000, 200);
+const contBlockPoints = SpatialBlocking.assignPointsToBlocks(
+    contData.trainingIndices, contBlocks.pixelBlockMap, contBlocks.numBlocks
+);
+
+const contBS = SpatialBlocking.bootstrapSample(contBlocks.numBlocks, 42);
+const contTD = SpatialBlocking.getTrainingData(contBS.blockWeights, contBlockPoints);
+
+// OOB points
+const contOOBPts = [];
+for (const block of contBS.oobBlocks) {
+    if (contBlockPoints[block]) {
+        for (const ptIdx of contBlockPoints[block]) contOOBPts.push(ptIdx);
+    }
+}
+
+// Prepare features and continuous labels
+const contTrainF = new Float32Array(contTD.indices.length * 10);
+const contTrainL = new Float32Array(contTD.indices.length);
+for (let i = 0; i < contTD.indices.length; i++) {
+    const ptIdx = contTD.indices[i];
+    for (let b = 0; b < 10; b++) contTrainF[i * 10 + b] = contData.trainingFeatures[ptIdx * 10 + b];
+    contTrainL[i] = contData.continuousTruth[contData.trainingIndices[ptIdx]];
+}
+
+const contOOBFeatures = new Float32Array(contOOBPts.length * 10);
+const contOOBLabels = new Float32Array(contOOBPts.length);
+for (let i = 0; i < contOOBPts.length; i++) {
+    const ptIdx = contOOBPts[i];
+    for (let b = 0; b < 10; b++) contOOBFeatures[i * 10 + b] = contData.trainingFeatures[ptIdx * 10 + b];
+    contOOBLabels[i] = contData.continuousTruth[contData.trainingIndices[ptIdx]];
+}
+
+// Train regression forest
+const contRng = new RF.SeededRNG(42);
+const contConfig = { nTrees: 30, maxDepth: 10, minLeafSamples: 5, mtry: 3 };
+const contTrees = RF.trainForest(contTrainF, contTrainL, contTD.weights,
+    contTD.indices.length, 10, contConfig, contRng, false);
+
+assert(contTrees.length === 30, 'Should train 30 regression trees');
+
+// Predict OOB
+const contOOBPred = RF.predictForest(contTrees, contOOBFeatures,
+    Array.from({ length: contOOBPts.length }, (_, i) => i), 10, false, 0);
+assert(contOOBPred instanceof Float32Array, 'Regression predictions should be Float32Array');
+
+// Compute regression metrics
+const contRegMetrics = RF.computeRegressionMetrics(contOOBPred, contOOBLabels);
+assert(contRegMetrics.r2 > 0.3, `Continuous R² should be > 0.3 (got ${contRegMetrics.r2.toFixed(3)})`);
+assert(contRegMetrics.rmse > 0, `RMSE should be positive (got ${contRegMetrics.rmse.toFixed(1)})`);
+assert(contRegMetrics.relRmse > 0, `Relative RMSE should be positive (got ${contRegMetrics.relRmse.toFixed(4)})`);
+assert(contRegMetrics.relRmse < 1.0, `Relative RMSE should be < 100% (got ${(contRegMetrics.relRmse * 100).toFixed(1)}%)`);
+assert(contRegMetrics.totalPredicted > 0, 'Total predicted biomass should be positive');
+assert(contRegMetrics.n === contOOBPts.length, 'n should match OOB count');
+
+console.log(`  ✓ Continuous Mode Integration: ${passed - singleSplitPassed} assertions passed`);
+console.log(`    R²: ${contRegMetrics.r2.toFixed(3)}, RMSE: ${contRegMetrics.rmse.toFixed(1)}, relRMSE: ${(contRegMetrics.relRmse * 100).toFixed(1)}%`);
 
 // ══════════════════════════════════════════════════════════════
 //  RESULTS SUMMARY

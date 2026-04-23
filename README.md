@@ -165,19 +165,24 @@ The project includes a comprehensive test suite (`tests.js`) covering all core a
 node tests.js
 ```
 
-Expected output: **223 assertions, 0 failures.**
+Expected output: **267 assertions, 0 failures.**
 
 ### Test Sections
 
-| Section                      | Tests | What's Verified                                                                                                                                                                                                                                     |
-| ---------------------------- | ----: | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **SyntheticData**            |   135 | Raster dimensions, band generation, deterministic seeding, value ranges, categorical class validity, continuous ground truth, point sampling uniqueness, feature extraction                                                                         |
-| **SpatialBlocking**          |    38 | Block grid geometry, pixel-to-block assignment correctness, point assignment, bootstrap sampling, OOB fraction ≈ 36.8% (verified over 1,000 trials), deterministic seeding, weight consistency, `getPixelsInBlocks` counts, `getTrainingData` shape |
-| **Random Forest**            |    10 | Seeded RNG determinism, classification accuracy > 90% on linearly separable 2D data, regression R² > 0.85 on linear data, correct typed array output                                                                                                |
-| **Accuracy Metrics**         |    17 | Perfect classification (OA/UA/PA = 1.0), known misclassification with hand-computed confusion matrix, RMSE/R²/mean residual/total predicted against exact values                                                                                    |
-| **Olofsson Area Correction** |     6 | Corrected areas sum to total pixels, perfect classification preserves areas, reasonable values for imperfect matrices                                                                                                                               |
-| **Summary Statistics**       |     9 | Mean/median of known sequences, CI bounds ordering, single-value edge case, odd-length median                                                                                                                                                       |
-| **Integration**              |     8 | Full pipeline: generate → block → bootstrap → train → predict → metrics → area correction, with OA > 50% and corrected areas summing to 1M                                                                                                          |
+| Section                              | Tests | What's Verified                                                                                                                                                                                                                                     |
+| ------------------------------------ | ----: | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **SyntheticData**                    |   135 | Raster dimensions, band generation, deterministic seeding, value ranges, categorical class validity, continuous ground truth, point sampling uniqueness, feature extraction                                                                         |
+| **SpatialBlocking**                  |    38 | Block grid geometry, pixel-to-block assignment correctness, point assignment, bootstrap sampling, OOB fraction ≈ 36.8% (verified over 1,000 trials), deterministic seeding, weight consistency, `getPixelsInBlocks` counts, `getTrainingData` shape |
+| **Random Forest**                    |    10 | Seeded RNG determinism, classification accuracy > 90% on linearly separable 2D data, regression R² > 0.85 on linear data, correct typed array output                                                                                                |
+| **Accuracy Metrics**                 |    17 | Perfect classification (OA/UA/PA = 1.0), known misclassification with hand-computed confusion matrix, RMSE/R²/mean residual/total predicted against exact values                                                                                    |
+| **Olofsson Area Correction**         |     6 | Corrected areas sum to total pixels, perfect classification preserves areas, reasonable values for imperfect matrices                                                                                                                               |
+| **Summary Statistics**               |     9 | Mean/median of known sequences, CI bounds ordering, single-value edge case, odd-length median                                                                                                                                                       |
+| **Integration**                      |     8 | Full pipeline: generate → block → bootstrap → train → predict → metrics → area correction, with OA > 50% and corrected areas summing to 1M                                                                                                          |
+| **Sensor Noise & Hidden Gradient**   |    20 | Noisy vs clean band divergence, noise magnitude bounds, class balance realism (Water ≥ 1%, all 5 classes present, no class > 60%)                                                                                                                   |
+| **Continuous Mode Metrics**          |     7 | RMSE, R², relative RMSE hand-computed against known values, totalPredicted sum                                                                                                                                                                      |
+| **Pitfall Comparison Logic**         |     3 | Spatial blocking vs random-split accuracy on autocorrelated data, inflation ≥ −5pp (confirming data leakage effect)                                                                                                                                 |
+| **Single-Split vs Repeated**         |     6 | Bootstrap distribution spread > 1pp, single replicate within range, CI bounds ordering, pairwise OA differences > 1pp                                                                                                                               |
+| **Continuous Mode Integration**      |     8 | Full regression pipeline: generate → block → bootstrap → train → predict → regression metrics (R², RMSE, relRMSE, totalPredicted, n)                                                                                                                |
 
 ---
 

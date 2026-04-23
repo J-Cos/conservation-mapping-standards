@@ -1052,23 +1052,36 @@ const App = (() => {
     }
 
     /* ============================================
-       PITFALL COMPARISON: Random split vs Spatial blocking
+       PITFALL COMPARISONS
        ============================================ */
     function addPitfallButton() {
         // Only show if Step 4 has accuracy-stats rendered
         const statsEl = document.getElementById('accuracy-stats');
         if (!statsEl) return;
 
-        // Remove any existing button
-        const existing = document.getElementById('btn-pitfall-compare');
+        // Remove any existing buttons
+        const existing = document.getElementById('pitfall-buttons');
         if (existing) existing.remove();
 
-        const btn = document.createElement('button');
-        btn.id = 'btn-pitfall-compare';
-        btn.className = 'btn btn-compare';
-        btn.textContent = '⚠️ Compare: What if we skipped spatial blocking?';
-        btn.addEventListener('click', runPitfallComparison);
-        statsEl.after(btn);
+        const wrap = document.createElement('div');
+        wrap.id = 'pitfall-buttons';
+        wrap.style.cssText = 'display:flex; gap:12px; flex-wrap:wrap; margin-top:16px;';
+
+        const btn1 = document.createElement('button');
+        btn1.id = 'btn-pitfall-compare';
+        btn1.className = 'btn btn-compare';
+        btn1.textContent = '⚠️ Compare: What if we skipped spatial blocking?';
+        btn1.addEventListener('click', runPitfallComparison);
+
+        const btn2 = document.createElement('button');
+        btn2.id = 'btn-single-split';
+        btn2.className = 'btn btn-compare';
+        btn2.textContent = '⚠️ Compare: What if we used only a single split?';
+        btn2.addEventListener('click', runSingleSplitComparison);
+
+        wrap.appendChild(btn1);
+        wrap.appendChild(btn2);
+        statsEl.after(wrap);
     }
 
     function runPitfallComparison() {
@@ -1324,6 +1337,143 @@ const App = (() => {
         }
 
         // Scroll to the pitfall panel
+        panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    /* ============================================
+       SINGLE-SPLIT COMPARISON
+       ============================================ */
+    function runSingleSplitComparison() {
+        const btn = document.getElementById('btn-single-split');
+        if (btn) {
+            btn.disabled = true;
+            btn.textContent = '✓ Single-split comparison shown below';
+        }
+
+        const panel = document.getElementById('single-split-comparison');
+        if (!panel) return;
+        panel.classList.remove('hidden');
+
+        const results = state.results;
+        const d = state.data;
+        const isClassification = state.mode === 'categorical';
+
+        // Pick a random replicate to illustrate "what if you only did one?"
+        const rng = mulberry32(state.config.seed + 77777);
+        const singleIdx = Math.floor(rng() * results.length);
+        const single = results[singleIdx];
+
+        const contentEl = document.getElementById('single-split-content');
+        let html = '';
+
+        if (isClassification) {
+            const oas = results.map(r => r.metrics.overallAccuracy);
+            const oaStats = PNASCharts.summaryStats(oas);
+            const singleOA = single.metrics.overallAccuracy;
+
+            // Show the single value vs the distribution
+            html += `<div class="stats-row">`;
+            html += `
+              <div class="stat-card stat-card--warn">
+                <div class="stat-card__label">Single Split OA</div>
+                <div class="stat-card__value">${(singleOA * 100).toFixed(1)}%</div>
+                <div class="stat-card__ci">No confidence interval</div>
+                <div class="stat-card__ci" style="color:var(--text-muted)">Just one number</div>
+              </div>
+            `;
+            html += `
+              <div class="stat-card stat-card--pass">
+                <div class="stat-card__label">Repeated Assessment OA</div>
+                <div class="stat-card__value">${(oaStats.mean * 100).toFixed(1)}%</div>
+                <div class="stat-card__ci">95% CI: [${(oaStats.ci95[0] * 100).toFixed(1)}, ${(oaStats.ci95[1] * 100).toFixed(1)}]</div>
+                <div class="stat-card__ci" style="color:var(--text-muted)">From ${results.length} replicates</div>
+              </div>
+            `;
+
+            // Show per-class comparison
+            for (let c = 0; c < d.numClasses; c++) {
+                const allUA = results.map(r => r.metrics.userAccuracy[c]);
+                const uaStats = PNASCharts.summaryStats(allUA);
+                const singleUA = single.metrics.userAccuracy[c];
+                html += `
+                  <div class="stat-card">
+                    <div class="stat-card__label">${d.classNames[c]} (UA)</div>
+                    <div class="stat-card__value">${(singleUA * 100).toFixed(1)}%</div>
+                    <div class="stat-card__ci">Range: [${(uaStats.ci95[0] * 100).toFixed(1)}, ${(uaStats.ci95[1] * 100).toFixed(1)}]</div>
+                  </div>
+                `;
+            }
+            html += `</div>`;
+
+            // Explanation
+            const spread = ((oaStats.ci95[1] - oaStats.ci95[0]) * 100).toFixed(1);
+            const deviation = ((singleOA - oaStats.mean) * 100).toFixed(1);
+            const absDeviation = Math.abs(parseFloat(deviation)).toFixed(1);
+
+            html += `
+              <div class="info-alert info-alert--warning mt-4">
+                <strong>Result:</strong> This single split gave an overall accuracy of
+                <strong>${(singleOA * 100).toFixed(1)}%</strong>, which is
+                ${parseFloat(deviation) >= 0 ? '+' : ''}${deviation} pp from the mean of ${(oaStats.mean * 100).toFixed(1)}%.
+                The full distribution spans <strong>${spread} percentage points</strong> (95% CI).
+                With only one split, you'd have no way to know where in this range your estimate falls —
+                it could easily ${oaStats.ci95[0] < 0.85 ? 'fall below the 85% pass threshold or ' : ''}
+                mislead a conservation decision.
+                <strong>Repeated assessments are essential for knowing the precision of your accuracy estimate.</strong>
+              </div>
+            `;
+        } else {
+            // Continuous mode
+            const r2s = results.map(r => r.metrics.r2);
+            const r2Stats = PNASCharts.summaryStats(r2s);
+            const singleR2 = single.metrics.r2;
+            const rmses = results.map(r => r.metrics.rmse);
+            const rmseStats = PNASCharts.summaryStats(rmses);
+            const singleRMSE = single.metrics.rmse;
+
+            html += `<div class="stats-row">`;
+            html += `
+              <div class="stat-card stat-card--warn">
+                <div class="stat-card__label">Single Split R²</div>
+                <div class="stat-card__value">${singleR2.toFixed(3)}</div>
+                <div class="stat-card__ci">No confidence interval</div>
+              </div>
+            `;
+            html += `
+              <div class="stat-card stat-card--pass">
+                <div class="stat-card__label">Repeated Assessment R²</div>
+                <div class="stat-card__value">${r2Stats.mean.toFixed(3)}</div>
+                <div class="stat-card__ci">95% CI: [${r2Stats.ci95[0].toFixed(3)}, ${r2Stats.ci95[1].toFixed(3)}]</div>
+              </div>
+            `;
+            html += `
+              <div class="stat-card stat-card--warn">
+                <div class="stat-card__label">Single Split RMSE</div>
+                <div class="stat-card__value">${singleRMSE.toFixed(1)}</div>
+                <div class="stat-card__ci">No confidence interval</div>
+              </div>
+            `;
+            html += `
+              <div class="stat-card stat-card--pass">
+                <div class="stat-card__label">Repeated Assessment RMSE</div>
+                <div class="stat-card__value">${rmseStats.mean.toFixed(1)}</div>
+                <div class="stat-card__ci">95% CI: [${rmseStats.ci95[0].toFixed(1)}, ${rmseStats.ci95[1].toFixed(1)}]</div>
+              </div>
+            `;
+            html += `</div>`;
+
+            const r2Spread = ((r2Stats.ci95[1] - r2Stats.ci95[0]) * 100).toFixed(1);
+            html += `
+              <div class="info-alert info-alert--warning mt-4">
+                <strong>Result:</strong> This single split gave R² = <strong>${singleR2.toFixed(3)}</strong>,
+                but the full distribution spans <strong>${r2Spread} percentage points</strong> (95% CI).
+                A single estimate gives you no information about this variability.
+                <strong>Repeated assessments are essential for knowing the precision of your accuracy estimate.</strong>
+              </div>
+            `;
+        }
+
+        contentEl.innerHTML = html;
         panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
