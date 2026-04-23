@@ -2,7 +2,7 @@
 
 > **[Live Demo →](https://j-cos.github.io/conservation-mapping-standards/)**
 
-Companion to: **Schulte to Bühne, H., Williams, J., Byrne, A. & Pettorelli, N. (2026). A mapping standard for spatial data. *Methods in Ecology and Evolution*.**
+Companion to: **Schulte to Bühne, H., Williams, J., Byrne, A. & Pettorelli, N. (2026). A mapping standard for conservation. *Methods in Ecology and Evolution*.**
 
 An interactive, browser-based demonstrator that accompanies the proposed spatial mapping standard. Walk through the best-practice accuracy assessment pipeline on synthetic data — then see what happens when common shortcuts are taken.
 
@@ -201,7 +201,7 @@ Expected output: **267 assertions, 0 failures.**
 
 ## Scientific References
 
-- **Schulte to Bühne, H., Williams, J., Byrne, A. & Pettorelli, N. (2026).** A mapping standard for spatial data. *Methods in Ecology and Evolution*.
+- **Schulte to Bühne, H., Williams, J., Byrne, A. & Pettorelli, N. (2026).** A mapping standard for conservation. *Methods in Ecology and Evolution*.
 - **Olofsson, P. et al. (2014).** Good practices for estimating area and assessing accuracy of land use change. *Remote Sensing of Environment*, 148, 42–57. [doi:10.1016/j.rse.2014.02.015](https://doi.org/10.1016/j.rse.2014.02.015)
 - **Roberts, D. R. et al. (2017).** Cross-validation strategies for data with temporal, spatial, hierarchical, or phylogenetic structure. *Ecography*, 40(8), 913–929.
 - **Breiman, L. (2001).** Random Forests. *Machine Learning*, 45(1), 5–32.
