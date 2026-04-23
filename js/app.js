@@ -1435,6 +1435,8 @@ const App = (() => {
             // Continuous mode
             const spatialR2 = spatialResults.map(r => r.metrics.r2);
             const pitfallR2 = pitfallResults.map(r => r.metrics.r2);
+            const pitfallTrueAccuracies = pitfallResults.filter(r => r.trueMetrics).map(r => r.trueMetrics.r2);
+            const trueR2Mean = pitfallTrueAccuracies.length ? (pitfallTrueAccuracies.reduce((a,b)=>a+b,0)/pitfallTrueAccuracies.length) : null;
 
             document.getElementById('pitfall-chart1-title').textContent = 'R² Distribution: Random Split (Inflated!)';
             state.charts.pitfall1 = PNASCharts.histogram('chart-pitfall-1', pitfallR2, {
@@ -1443,6 +1445,7 @@ const App = (() => {
                 color: '#EE6677',
                 bins: 15,
                 thresholdLine: 0.8,
+                trueLine: trueR2Mean,
             });
 
             const spatialRMSE = spatialResults.map(r => r.metrics.rmse);
@@ -1470,6 +1473,7 @@ const App = (() => {
             const spatialR2Stats = PNASCharts.summaryStats(spatialR2);
             const pitfallR2Stats = PNASCharts.summaryStats(pitfallR2);
             const r2Inflation = ((pitfallR2Stats.mean - spatialR2Stats.mean) * 100).toFixed(1);
+            const trueText = trueR2Mean !== null ? `<br><br><em>Reality Check:</em> The <b>true</b> R² of the map across the entire landscape was actually only <b>${trueR2Mean.toFixed(3)}</b>. The spatial-blocking method safely covered this reality, but the random-split method dangerously overestimated it!` : '';
 
             const statsEl = document.getElementById('pitfall-stats');
             if (statsEl) {
@@ -1481,6 +1485,7 @@ const App = (() => {
                         Without spatial blocking, the model memorises local spatial patterns rather than
                         learning generalisable spectral-biomass relationships.
                         <strong>A map validated this way would not meet the mapping standard.</strong>
+                        ${trueText}
                     </div>
                 `;
             }
