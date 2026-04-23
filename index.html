@@ -95,8 +95,8 @@
             <input type="number" id="cfg-seed" value="42" min="1" max="9999">
           </div>
           <div class="control-group">
-            <label for="cfg-training-points">Training Points</label>
-            <input type="number" id="cfg-training-points" value="500" min="100" max="20000" step="100">
+            <label for="cfg-seed">Random Seed</label>
+            <input type="number" id="cfg-seed" value="42" min="1" max="9999">
           </div>
           <button id="btn-generate" class="btn btn-primary">▶ Generate Data</button>
         </div>
@@ -125,11 +125,59 @@
     </article>
 
     <!-- ────────────────────────────────────────────
-       STEP 2: Sampling Design & Spatial Blocking
+       STEP 2: Reference Data Collection
        ──────────────────────────────────────────── -->
     <article class="step-panel" data-step="2">
       <div class="step-panel__header">
         <div class="step-panel__number">2</div>
+        <h2 class="step-panel__title">Reference Data Collection</h2>
+        <div class="checklist-summary"><span class="check">✓</span> Simulate field data sampling</div>
+        <span class="step-panel__badge step-panel__badge--pending">Pending</span>
+        <svg class="step-panel__chevron" viewBox="0 0 20 20" fill="currentColor">
+          <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" />
+        </svg>
+      </div>
+      <div class="step-panel__body">
+        <p class="step-description">
+          Collecting reference data in the real world is expensive, so researchers typically sample in 
+          <strong>clusters</strong> (e.g., transects or plots). This is what creates spatial autocorrelation in the reference data, 
+          which leads to massive data leakage if spatial validation is skipped. Switch to <strong>True Random</strong> 
+          to see how completely unclustered sampling behaves.
+        </p>
+        
+        <div class="step-controls">
+          <div class="control-group">
+            <label for="cfg-training-points">Number of Points</label>
+            <input type="number" id="cfg-training-points" value="500" min="100" max="10000" step="100">
+          </div>
+          <div class="control-group">
+            <label for="cfg-sampling-strategy">Sampling Strategy</label>
+            <select id="cfg-sampling-strategy">
+              <option value="clustered" selected>Realistic Clustered (Plots/Transects)</option>
+              <option value="random">True Random (Uniform/Purely Random)</option>
+            </select>
+          </div>
+          <button id="btn-collect-data" class="btn btn-primary">▶ Collect Reference Data</button>
+        </div>
+
+        <div class="viz-grid viz-grid--1 mt-4">
+          <div class="figure-container" style="max-width: 600px; margin: 0 auto;">
+            <div class="figure-container__title">Reference Data Locations</div>
+            <div class="raster-canvas-wrap">
+              <canvas id="canvas-sampling"></canvas>
+            </div>
+            <div class="mt-2 text-center text-sm" style="color: #666;">Points represent collected reference data overlaid on the ground truth.</div>
+          </div>
+        </div>
+      </div>
+    </article>
+
+    <!-- ────────────────────────────────────────────
+       STEP 3: Sampling Design & Spatial Blocking
+       ──────────────────────────────────────────── -->
+    <article class="step-panel" data-step="3">
+      <div class="step-panel__header">
+        <div class="step-panel__number">3</div>
         <h2 class="step-panel__title">Spatial Blocking &amp; Sampling Design</h2>
         <div class="checklist-summary"><span class="check">✓</span> Table 1: Independence &amp; spatial validity</div>
         <span class="step-panel__badge step-panel__badge--pending">Pending</span>
@@ -189,15 +237,36 @@
             </div>
           </div>
         </div>
+
+        <!-- VERDICT REPORT CARD -->
+        <div id="report-card-panel" class="mt-4 hidden" style="border: 2px solid #2D6A4F; border-radius: 8px; overflow: hidden; background: #fff; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+          <div style="background: #2D6A4F; color: #fff; padding: 12px 20px; font-weight: 700; font-size: 1.2rem; display: flex; justify-content: space-between; align-items: center;">
+            <span>Conservation Mapping Standard: Final Report Card</span>
+            <span id="report-card-grade" style="font-size: 1.5rem; background: rgba(255,255,255,0.2); padding: 4px 12px; border-radius: 4px;">PASS</span>
+          </div>
+          <div style="padding: 20px;">
+            <p style="margin-top: 0; color: #444; margin-bottom: 16px;">This summarizes the reliability of the generated map against the full known synthetic truth.</p>
+            
+            <div id="report-card-metrics" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 20px;">
+              <!-- Populated by JS -->
+            </div>
+
+            <div id="report-card-conclusion" style="background: #f8f9fa; padding: 16px; border-left: 4px solid #2D6A4F; border-radius: 4px; font-size: 0.95rem; line-height: 1.5; color: #333;">
+              <!-- Populated by JS -->
+            </div>
+          </div>
+        </div>
+        <!-- END VERDICT -->
+
       </div>
     </article>
 
     <!-- ────────────────────────────────────────────
-       STEP 3: Bootstrap SCV Random Forest
+       STEP 4: Bootstrap SCV & Random Forest
        ──────────────────────────────────────────── -->
-    <article class="step-panel" data-step="3">
+    <article class="step-panel" data-step="4">
       <div class="step-panel__header">
-        <div class="step-panel__number">3</div>
+        <div class="step-panel__number">4</div>
         <h2 class="step-panel__title">Repeated Cross-Validation</h2>
         <div class="checklist-summary"><span class="check">✓</span> Table 1: Map accuracy &amp; precision</div>
         <span class="step-panel__badge step-panel__badge--pending">Pending</span>
@@ -261,11 +330,11 @@
     </article>
 
     <!-- ────────────────────────────────────────────
-       STEP 4: Accuracy Assessment
+       STEP 5: Accuracy Assessment
        ──────────────────────────────────────────── -->
-    <article class="step-panel" data-step="4">
+    <article class="step-panel" data-step="5">
       <div class="step-panel__header">
-        <div class="step-panel__number">4</div>
+        <div class="step-panel__number">5</div>
         <h2 class="step-panel__title">Accuracy Assessment</h2>
         <div class="checklist-summary"><span class="check">✓</span> Table 1: Precision of map accuracy</div>
         <span class="step-panel__badge step-panel__badge--pending">Pending</span>
@@ -370,11 +439,11 @@
     </article>
 
     <!-- ────────────────────────────────────────────
-       STEP 5: Summary Statistics & Uncertainty
+       STEP 6: Summary Statistics & Uncertainty
        ──────────────────────────────────────────── -->
-    <article class="step-panel" data-step="5">
+    <article class="step-panel" data-step="6">
       <div class="step-panel__header">
-        <div class="step-panel__number">5</div>
+        <div class="step-panel__number">6</div>
         <h2 class="step-panel__title">Summary Statistics &amp; Uncertainty</h2>
         <div class="checklist-summary"><span class="check">✓</span> Table 1: Error-corrected summary statistics</div>
         <span class="step-panel__badge step-panel__badge--pending">Pending</span>
@@ -445,7 +514,7 @@
     <article id="verdict-panel" class="step-panel hidden" data-step="verdict">
       <div class="step-panel__header">
         <div class="step-panel__number" style="background:var(--zsl-green-dark)">✓</div>
-        <h2 class="step-panel__title">Does This Map Meet the Standard?</h2>
+        <h2 class="step-panel__title">Final Verdict &amp; Report Card</h2>
         <span class="step-panel__badge step-panel__badge--pending">Pending</span>
       </div>
       <div class="step-panel__body">
@@ -456,6 +525,26 @@
         </p>
         <div id="verdict-checklist"></div>
         <div id="verdict-summary" class="mt-4"></div>
+
+        <!-- NEW: REPORT CARD -->
+        <div id="report-card-panel" class="mt-8" style="border: 2px solid #2D6A4F; border-radius: 8px; overflow: hidden; background: #fff; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+          <div style="background: #2D6A4F; color: #fff; padding: 12px 20px; font-weight: 700; font-size: 1.2rem; display: flex; justify-content: space-between; align-items: center;">
+            <span>Pedagogical Report Card: Reality Check</span>
+            <span id="report-card-grade" style="font-size: 1.2rem; background: rgba(255,255,255,0.2); padding: 4px 12px; border-radius: 4px;">PASS</span>
+          </div>
+          <div style="padding: 20px;">
+            <p style="margin-top: 0; color: #444; margin-bottom: 16px;">This is a special feature of the demonstrator. Because this is synthetic data, we can calculate the <strong>True Landscape Accuracy</strong> and compare it to the map's internal estimate.</p>
+            
+            <div id="report-card-metrics" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 20px;">
+              <!-- Populated by JS -->
+            </div>
+
+            <div id="report-card-conclusion" style="background: #f8f9fa; padding: 16px; border-left: 4px solid #2D6A4F; border-radius: 4px; font-size: 0.95rem; line-height: 1.5; color: #333;">
+              <!-- Populated by JS -->
+            </div>
+          </div>
+        </div>
+        <!-- END REPORT CARD -->
       </div>
     </article>
 

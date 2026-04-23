@@ -61,12 +61,15 @@ const App = (() => {
         });
 
         // Step 1: Generate data
-        document.getElementById('btn-generate').addEventListener('click', generateData);
+        document.getElementById('btn-generate').addEventListener('click', generateLandscapeData);
 
-        // Step 2: Create blocks
+        // Step 2: Collect Reference Data
+        document.getElementById('btn-collect-data').addEventListener('click', collectReferenceData);
+
+        // Step 3: Create blocks
         document.getElementById('btn-create-blocks').addEventListener('click', createBlocks);
 
-        // Step 3: Run bootstrap
+        // Step 4: Run bootstrap
         document.getElementById('btn-run-bootstrap').addEventListener('click', runBootstrap);
         document.getElementById('btn-stop-bootstrap').addEventListener('click', stopBootstrap);
 
@@ -82,6 +85,9 @@ const App = (() => {
         });
         document.getElementById('cfg-training-points').addEventListener('change', (e) => {
             state.config.numTrainingPoints = parseInt(e.target.value) || 500;
+        });
+        document.getElementById('cfg-sampling-strategy').addEventListener('change', (e) => {
+            state.config.samplingStrategy = e.target.value;
         });
     }
 
@@ -135,9 +141,9 @@ const App = (() => {
     }
 
     /* ============================================
-       STEP 1: Generate Synthetic Data
+       STEP 1: Generate Synthetic Landscape
        ============================================ */
-    function generateData() {
+    function generateLandscapeData() {
         const btn = document.getElementById('btn-generate');
         btn.disabled = true;
         btn.innerHTML = '<span class="spinner"></span> Generating...';
@@ -145,19 +151,18 @@ const App = (() => {
         // Use setTimeout to allow UI to update
         setTimeout(() => {
             const seed = parseInt(document.getElementById('cfg-seed')?.value) || state.config.seed;
-            const numPts = state.config.numTrainingPoints;
 
-            state.data = SyntheticData.generate(seed, numPts);
-            renderStep1();
+            state.data = SyntheticData.generateLandscape(seed);
+            renderStep3();
 
             btn.disabled = false;
-            btn.innerHTML = '✓ Regenerate Data';
-            markStepDone(1);
-            openStep(2);
+            btn.innerHTML = '✓ Recreate Blocks';
+            markStepDone(3);
+            openStep(4);
         }, 50);
     }
 
-    function renderStep1() {
+    function renderStep3() {
         const d = state.data;
         if (!d) return;
 
@@ -184,7 +189,6 @@ const App = (() => {
         statsHTML += `<div class="stat-card"><div class="stat-card__label">Dimensions</div><div class="stat-card__value">${d.width}×${d.height}</div></div>`;
         statsHTML += `<div class="stat-card"><div class="stat-card__label">Bands</div><div class="stat-card__value">${d.numBands}</div></div>`;
         statsHTML += `<div class="stat-card"><div class="stat-card__label">Pixels</div><div class="stat-card__value">${(totalPixels / 1e6).toFixed(1)}M</div></div>`;
-        statsHTML += `<div class="stat-card"><div class="stat-card__label">Training Points</div><div class="stat-card__value">${d.trainingIndices.length.toLocaleString()}</div></div>`;
 
         if (state.mode === 'categorical') {
             statsHTML += `<div class="stat-card"><div class="stat-card__label">Classes</div><div class="stat-card__value">${d.numClasses}</div></div>`;
@@ -209,27 +213,97 @@ const App = (() => {
         }
 
         statsEl.innerHTML = statsHTML;
+
+        if (d.trainingIndices) {
+            // Also draw sampling points if we're rerendering Step 1 after Step 2
+            renderStep2();
+        }
     }
 
     /* ============================================
-       STEP 2: Spatial Blocking
+       STEP 2: Reference Data Collection
        ============================================ */
-    function createBlocks() {
-        const d = state.data;
-        if (!d) { alert('Generate data first (Step 1)'); return; }
+    function collectReferenceData() {
+        if (!state.data) { alert('Complete Step 1 first'); return; }
+        
+        const btn = document.getElementById('btn-collect-data');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner"></span> Collecting...';
 
-        const blockSize = state.config.blockSize;
-        state.blocks = SpatialBlocking.createBlocks(d.width, d.height, blockSize);
-        state.blockPoints = SpatialBlocking.assignPointsToBlocks(
-            d.trainingIndices, state.blocks.pixelBlockMap, state.blocks.numBlocks
-        );
+        setTimeout(() => {
+            const numPts = state.config.numTrainingPoints;
+            const strategy = state.config.samplingStrategy || 'clustered';
+            const seed = state.config.seed + 100;
 
-        renderStep2();
-        markStepDone(2);
-        openStep(3);
+            SyntheticData.sampleReferenceData(state.data, numPts, strategy, seed);
+            renderStep2();
+
+            btn.disabled = false;
+            btn.innerHTML = '✓ Re-collect Data';
+            markStepDone(2);
+            openStep(3);
+        }, 50);
     }
 
     function renderStep2() {
+        const d = state.data;
+        if (!d || !d.trainingIndices) return;
+
+        const canvas = document.getElementById('canvas-sampling');
+        if (!canvas) return;
+
+        // Render Truth as background
+        if (state.mode === 'categorical') {
+            RasterViz.renderClassMap(canvas, d.categoricalTruth, d.width, d.height, d.classColors);
+        } else {
+            RasterViz.renderContinuous(canvas, d.continuousTruth, d.width, d.height, 0, 500);
+        }
+
+        // Overlay points
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#000000';
+        ctx.strokeStyle = '#FFFFFF';
+        ctx.lineWidth = 0.5;
+
+        for (let i = 0; i < d.trainingIndices.length; i++) {
+            const pt = d.trainingIndices[i];
+            const px = pt % d.width;
+            const py = Math.floor(pt / d.width);
+            ctx.beginPath();
+            ctx.arc(px, py, 2.5, 0, 2 * Math.PI);
+            ctx.fill();
+            ctx.stroke();
+        }
+    }
+
+    /* ============================================
+       STEP 3: Spatial Blocking
+       ============================================ */
+    function createBlocks() {
+        const d = state.data;
+        if (!d) { alert('Generate and collect data first (Steps 1-2)'); return; }
+        
+        const btn = document.getElementById('btn-create-blocks');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner"></span> Creating Blocks...';
+
+        setTimeout(() => {
+            const blockSize = state.config.blockSize;
+            state.blocks = SpatialBlocking.createBlocks(d.width, d.height, blockSize);
+            state.blockPoints = SpatialBlocking.assignPointsToBlocks(
+                d.trainingIndices, state.blocks.pixelBlockMap, state.blocks.numBlocks
+            );
+
+            renderStep3();
+
+            btn.disabled = false;
+            btn.innerHTML = '✓ Recreate Blocks';
+            markStepDone(3);
+            openStep(4);
+        }, 50);
+    }
+
+    function renderStep3() {
         const d = state.data;
         const b = state.blocks;
         if (!d || !b) return;
@@ -267,7 +341,7 @@ const App = (() => {
     }
 
     /* ============================================
-       STEP 3: Bootstrap SCV Random Forest
+       STEP 4: Bootstrap SCV Random Forest
        ============================================ */
     function runBootstrap() {
         if (!state.data || !state.blocks) { alert('Complete Steps 1-2 first'); return; }
@@ -293,7 +367,7 @@ const App = (() => {
         btn.disabled = true;
         btn.innerHTML = '<span class="spinner"></span> Running...';
         document.getElementById('btn-stop-bootstrap').classList.remove('hidden');
-        markStepRunning(3);
+        markStepRunning(4);
 
         const d = state.data;
         const isClassification = state.mode === 'categorical';
@@ -520,13 +594,14 @@ const App = (() => {
         document.getElementById('btn-run-bootstrap').disabled = false;
         document.getElementById('btn-run-bootstrap').innerHTML = '✓ Re-run Bootstrap';
         document.getElementById('btn-stop-bootstrap').classList.add('hidden');
-
-        markStepDone(3);
-        renderStep4();
+        markStepDone(4);
+        
+        // Also trigger rendering of Steps 5 and 6
         renderStep5();
-        addPitfallButton();
-        renderVerdict();
-        openStep(4);
+        renderStep6();
+        renderReportCard();
+        
+        openStep(5);
     }
 
     function updateProgress(completed, total, elapsedMs, etaSeconds) {
@@ -732,9 +807,24 @@ const App = (() => {
     }
 
     /* ============================================
-       STEP 5: Summary Statistics
+       STEP 5: Render Accuracy Assessment
        ============================================ */
     function renderStep5() {
+        if (state.results.length === 0) return;
+
+        const isClassification = state.mode === 'categorical';
+
+        if (isClassification) {
+            renderClassificationAccuracy();
+        } else {
+            renderRegressionAccuracy();
+        }
+    }
+
+    /* ============================================
+       STEP 6: Map Generation & Area Estimation
+       ============================================ */
+    function renderStep6() {
         if (state.results.length === 0) return;
         markStepDone(4);
 
@@ -748,8 +838,8 @@ const App = (() => {
 
         // Render uncertainty map
         renderUncertaintyMap();
-        openStep(5);
         markStepDone(5);
+        markStepDone(6);
     }
 
     function renderCategoricalSummary() {
@@ -1533,6 +1623,110 @@ const App = (() => {
 
         contentEl.innerHTML = html;
         panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    /* ============================================
+       REPORT CARD
+       ============================================ */
+    function renderReportCard() {
+        const panel = document.getElementById('report-card-panel');
+        if (!panel) return;
+        panel.classList.remove('hidden');
+
+        const metricsEl = document.getElementById('report-card-metrics');
+        const conclusionEl = document.getElementById('report-card-conclusion');
+        const gradeEl = document.getElementById('report-card-grade');
+        
+        const isClassification = state.mode === 'categorical';
+        const results = state.results;
+        const trueAccuracies = results.filter(r => r.trueMetrics).map(r => r.trueMetrics);
+        
+        if (trueAccuracies.length === 0) return;
+
+        let html = '';
+        let conclusion = '';
+        let grade = 'PASS';
+        
+        const strategy = state.config.samplingStrategy || 'clustered';
+
+        if (isClassification) {
+            const oas = results.map(r => r.metrics.overallAccuracy);
+            const estOA = PNASCharts.summaryStats(oas).mean * 100;
+            const trueOA = (trueAccuracies.reduce((a,b)=>a+b.overallAccuracy,0)/trueAccuracies.length) * 100;
+            const diff = trueOA - estOA;
+            
+            html += `
+              <div class="stat-card">
+                <div class="stat-card__label">Expected Map Accuracy</div>
+                <div class="stat-card__value">${estOA.toFixed(1)}%</div>
+                <div class="stat-card__ci">Estimated via Spatial Blocking</div>
+              </div>
+              <div class="stat-card ${diff < -5 ? 'stat-card--warn' : 'stat-card--pass'}">
+                <div class="stat-card__label">True Landscape Accuracy</div>
+                <div class="stat-card__value">${trueOA.toFixed(1)}%</div>
+                <div class="stat-card__ci">Calculated on 1M pixels</div>
+              </div>
+            `;
+            
+            if (strategy === 'random') {
+                conclusion = `<strong>Great!</strong> Because you used <strong>True Random</strong> sampling, your reference data was completely unclustered. As a result, your expected accuracy (${estOA.toFixed(1)}%) is almost perfectly aligned with the actual map accuracy (${trueOA.toFixed(1)}%). Any form of cross-validation works well with perfectly random data.`;
+                grade = 'A+';
+                gradeEl.style.backgroundColor = '#2D6A4F';
+            } else {
+                if (Math.abs(diff) < 2.0) {
+                    conclusion = `<strong>Success!</strong> Even though your field data was collected in realistic <strong>clusters</strong>, using <strong>Spatial Blocking</strong> successfully prevented data leakage. Your estimated accuracy (${estOA.toFixed(1)}%) closely matches the map's true performance (${trueOA.toFixed(1)}%).`;
+                    grade = 'PASS';
+                    gradeEl.style.backgroundColor = '#2D6A4F';
+                } else if (diff < -5.0) {
+                    conclusion = `<strong>Warning!</strong> Your estimated accuracy (${estOA.toFixed(1)}%) is significantly higher than the true accuracy (${trueOA.toFixed(1)}%). Because your data was highly <strong>clustered</strong>, the block size you chose (${state.config.blockSize}) might have been too small, allowing some spatial autocorrelation to leak between blocks and artificially inflate your estimate.`;
+                    grade = 'FAIL';
+                    gradeEl.style.backgroundColor = '#EE6677';
+                } else {
+                    conclusion = `<strong>Good.</strong> Your spatial blocking effectively estimated the map's performance without dramatic overestimation.`;
+                    grade = 'PASS';
+                    gradeEl.style.backgroundColor = '#2D6A4F';
+                }
+            }
+        } else {
+            // Regression report card logic
+            const r2s = results.map(r => r.metrics.r2);
+            const estR2 = PNASCharts.summaryStats(r2s).mean;
+            const trueR2 = trueAccuracies.reduce((a,b)=>a+b.r2,0)/trueAccuracies.length;
+            const diff = trueR2 - estR2;
+
+            html += `
+              <div class="stat-card">
+                <div class="stat-card__label">Expected Map R²</div>
+                <div class="stat-card__value">${estR2.toFixed(3)}</div>
+                <div class="stat-card__ci">Estimated via Spatial Blocking</div>
+              </div>
+              <div class="stat-card ${diff < -0.1 ? 'stat-card--warn' : 'stat-card--pass'}">
+                <div class="stat-card__label">True Landscape R²</div>
+                <div class="stat-card__value">${trueR2.toFixed(3)}</div>
+                <div class="stat-card__ci">Calculated on 1M pixels</div>
+              </div>
+            `;
+            
+            if (strategy === 'random') {
+                conclusion = `<strong>Great!</strong> Because you used <strong>True Random</strong> sampling, your expected accuracy (${estR2.toFixed(3)}) perfectly matches reality (${trueR2.toFixed(3)}).`;
+                grade = 'A+';
+                gradeEl.style.backgroundColor = '#2D6A4F';
+            } else {
+                if (Math.abs(diff) < 0.05) {
+                    conclusion = `<strong>Success!</strong> Spatial Blocking successfully mitigated the spatial clustering in your data. Your estimated R² (${estR2.toFixed(3)}) closely matches reality (${trueR2.toFixed(3)}).`;
+                    grade = 'PASS';
+                    gradeEl.style.backgroundColor = '#2D6A4F';
+                } else {
+                    conclusion = `<strong>Warning!</strong> The estimate was slightly inflated. Your block size might need increasing.`;
+                    grade = 'WARN';
+                    gradeEl.style.backgroundColor = '#f6c23e';
+                }
+            }
+        }
+        
+        metricsEl.innerHTML = html;
+        conclusionEl.innerHTML = conclusion;
+        gradeEl.textContent = grade;
     }
 
     return { init };
