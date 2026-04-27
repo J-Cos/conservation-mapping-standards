@@ -138,7 +138,7 @@ const SyntheticData = (() => {
         noisyBands.set(bands); // copy first
         let noiseRng = seed + 999;
         const noiseRand = () => { noiseRng = (noiseRng * 1664525 + 1013904223) & 0x7FFFFFFF; return noiseRng / 0x7FFFFFFF; };
-        const NOISE_LEVEL = 0.06; // 6% additive noise — realistic sensor measurement error
+        const NOISE_LEVEL = 0.04; // 6% additive noise — realistic sensor measurement error
         for (let b = 0; b < NUM_BANDS; b++) {
             const offset = b * totalPixels;
             for (let i = 0; i < totalPixels; i++) {
@@ -171,7 +171,7 @@ const SyntheticData = (() => {
 
             // Environment variable: soil moisture / topographic wetness
             // Shifts thresholds, making class boundaries location-dependent
-            const env = envNoise.fbm(x * 0.004, y * 0.004, 3) * 0.06;
+            const env = envNoise.fbm(x * 0.004, y * 0.004, 3) * 0.02;
 
             // Decision rules with environment-shifted thresholds
             // The env variable shifts boundaries enough to cause real confusion
