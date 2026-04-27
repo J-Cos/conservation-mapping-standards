@@ -217,7 +217,7 @@ const SyntheticData = (() => {
             );
 
             // Add heteroscedastic noise (more noise at higher biomass)
-            const noise = (rand() - 0.5) * 0.15 * b;
+            const noise = (rand() - 0.5) * 0.06 * b;
             b = Math.max(0, Math.min(500, b + noise));
             biomass[i] = b;
         }

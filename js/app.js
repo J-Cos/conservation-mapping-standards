@@ -115,9 +115,19 @@ const App = (() => {
 
     /* --- Step accordion --- */
     function openStep(num) {
+        // Open the target step; keep completed steps open
         document.querySelectorAll('.step-panel').forEach(p => {
-            p.classList.toggle('open', parseInt(p.dataset.step) === num);
+            const stepNum = parseInt(p.dataset.step);
+            if (stepNum === num) {
+                p.classList.add('open');
+            } else if (!p.classList.contains('completed')) {
+                // Close uncompleted panels that aren't the target
+                p.classList.remove('open');
+            }
         });
+        // Scroll the newly opened step into view
+        const target = document.querySelector(`.step-panel[data-step="${num}"]`);
+        if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
     function toggleStep(num) {
@@ -1671,7 +1681,7 @@ const App = (() => {
               <div class="stat-card ${diff < -5 ? 'stat-card--warn' : 'stat-card--pass'}">
                 <div class="stat-card__label">True Landscape Accuracy</div>
                 <div class="stat-card__value">${trueOA.toFixed(1)}%</div>
-                <div class="stat-card__ci">Calculated on 1M pixels</div>
+                <div class="stat-card__ci">Independent test (10,000 pixels)</div>
               </div>
             `;
             
@@ -1710,7 +1720,7 @@ const App = (() => {
               <div class="stat-card ${diff < -0.1 ? 'stat-card--warn' : 'stat-card--pass'}">
                 <div class="stat-card__label">True Landscape R²</div>
                 <div class="stat-card__value">${trueR2.toFixed(3)}</div>
-                <div class="stat-card__ci">Calculated on 1M pixels</div>
+                <div class="stat-card__ci">Independent test (10,000 pixels)</div>
               </div>
             `;
             

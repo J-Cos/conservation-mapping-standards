@@ -227,6 +227,10 @@ body {
   transition: box-shadow var(--transition);
 }
 
+.step-panel.open {
+  overflow: visible;
+}
+
 .step-panel:hover {
   box-shadow: var(--shadow-md);
 }
@@ -332,7 +336,8 @@ body {
 
 .step-panel.open .step-panel__body {
   padding: var(--space-6);
-  max-height: 5000px;
+  max-height: none;
+  overflow: visible;
 }
 
 /* --- Step Body Layouts --- */
@@ -759,7 +764,7 @@ body {
   white-space: normal;
   width: max-content;
   max-width: 280px;
-  z-index: 100;
+  z-index: 1000;
   pointer-events: none;
   transition: opacity 0.15s ease, visibility 0.15s ease;
   box-shadow: 0 4px 12px rgba(0,0,0,0.2);
