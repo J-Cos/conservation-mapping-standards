@@ -54,7 +54,7 @@
       <div class="step-panel__header">
         <div class="step-panel__number">1</div>
         <h2 class="step-panel__title">Synthetic Data Generation</h2>
-        <div class="checklist-summary"><span class="check">✓</span> Table 1: Thematic validity &amp; coverage</div>
+        <div class="checklist-summary"><span class="check">✓</span> Generate synthetic landscape</div>
         <span class="step-panel__badge step-panel__badge--pending">Pending</span>
         <svg class="step-panel__chevron" viewBox="0 0 20 20" fill="currentColor">
           <path fill-rule="evenodd"
@@ -63,28 +63,30 @@
       </div>
       <div class="step-panel__body">
         <p class="step-description">
-          Generate a <strong>1000×1000 pixel synthetic landscape</strong> with
-          <span class="tech-term">10 spectral bands<span class="tech-term__tip">Spectral bands are measurements of light at different wavelengths (e.g. red, near-infrared, thermal). Satellites capture these to distinguish land cover types.</span></span>
-          exhibiting realistic spatial patterns.
-          Ground truth is defined as either <strong>5 land cover classes</strong> (categorical) or
-          <strong>above-ground biomass</strong> 0–500
-          <span class="tech-term">Mg/ha<span class="tech-term__tip">Megagrams (tonnes) per hectare — a standard unit for measuring how much plant material is present in a given area.</span></span>
-          (continuous), derived from nonlinear combinations of the spectral bands.
-          Because this is synthetic data, we know the true answer everywhere &mdash;
-          allowing us to rigorously test how well mapping methods recover the truth.
+          First, we generate satellite imagery for an artificial landscape (1000 by 1000 pixels).
+          The satellite imagery has 10 bands (similar to many open-source satellite sensors),
+          and realistic spatial relationships of reflectance values. We also generate the variable
+          that we want to map &mdash; either land cover or above-ground biomass &mdash; by combining
+          the artificial satellite bands and adding noise (simulating real sensor measurement error).
+          This means that we know what the true values are at every point on this map, and can
+          determine how well any map derived from the satellite imagery reflects them.
         </p>
         <details class="tech-detail">
           <summary>Technical details</summary>
           <div class="tech-detail__body">
             <dl>
               <dt>Spectral bands</dt>
-              <dd>10 bands mimicking a multispectral satellite sensor: Blue, Green, Red, NIR, SWIR-1, SWIR-2, Thermal, plus derived indices (NDVI, NDWI) and a texture layer.</dd>
+              <dd>10 bands mimicking a multispectral satellite sensor: Blue, Green, Red, NIR, SWIR-1, SWIR-2, Thermal, plus derived indices (NDVI, NDWI) and a texture layer. Units are dimensionless reflectance values (0–1).</dd>
               <dt>Spatial autocorrelation</dt>
               <dd>Generated using <code>Perlin noise</code> with fractal Brownian motion (fBm) — a standard technique for producing smooth, spatially correlated random fields at multiple scales.</dd>
               <dt>False-colour composite</dt>
               <dd>The left image maps NIR → Red, Red → Green, Green → Blue. Vegetation appears red/orange because it reflects strongly in the near-infrared.</dd>
-              <dt>Hidden environmental variable</dt>
+              <dt>Categorical mode: hidden environmental variable</dt>
               <dd>Class boundaries are influenced by an unobservable environmental gradient (e.g. soil moisture) that the classifier cannot access. This mimics the real-world gap between what a sensor measures and what determines land cover.</dd>
+              <dt>Continuous mode: biomass generation</dt>
+              <dd>Biomass (0–500 Mg/ha) is derived directly from nonlinear combinations of the spectral bands with added heteroscedastic noise. Unlike categorical mode, no hidden environmental variable is used — the mapping difficulty arises from sensor noise and the nonlinear spectral–biomass relationship.</dd>
+              <dt>Sensor noise</dt>
+              <dd>Additive random noise is applied to all bands to simulate real sensor measurement error. The classifier trains on these noisy bands, while the true values are derived from clean bands — creating a realistic accuracy ceiling.</dd>
             </dl>
           </div>
         </details>
@@ -93,6 +95,16 @@
           <div class="control-group">
             <label for="cfg-seed">Random Seed</label>
             <input type="number" id="cfg-seed" value="42" min="1" max="9999">
+            <small style="display:block; color:#666; margin-top:2px;">Change this to any number to generate a different synthetic landscape.</small>
+          </div>
+          <div class="control-group">
+            <label for="cfg-noise">Sensor Noise Level</label>
+            <select id="cfg-noise">
+              <option value="low">Low (clear signal)</option>
+              <option value="medium" selected>Medium (realistic)</option>
+              <option value="high">High (challenging)</option>
+            </select>
+            <small style="display:block; color:#666; margin-top:2px;">Controls how much measurement error is added to the satellite bands.</small>
           </div>
           <button id="btn-generate" class="btn btn-primary">▶ Generate Data</button>
         </div>
@@ -108,8 +120,8 @@
           </div>
           <div class="figure-container">
             <div class="figure-container__title" id="truth-title">
-              <span data-mode="categorical">Ground Truth (Land Cover Classification)</span>
-              <span data-mode="continuous">Ground Truth (Above-Ground Biomass)</span>
+              <span data-mode="categorical">True Values (Land Cover Classification)</span>
+              <span data-mode="continuous">True Values (Above-Ground Biomass)</span>
             </div>
             <div class="raster-canvas-wrap">
               <canvas id="canvas-truth"></canvas>
@@ -127,7 +139,7 @@
       <div class="step-panel__header">
         <div class="step-panel__number">2</div>
         <h2 class="step-panel__title">Reference Data Collection</h2>
-        <div class="checklist-summary"><span class="check">✓</span> Simulate field data sampling</div>
+        <div class="checklist-summary"><span class="check">✓</span> Collect reference data</div>
         <span class="step-panel__badge step-panel__badge--pending">Pending</span>
         <svg class="step-panel__chevron" viewBox="0 0 20 20" fill="currentColor">
           <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" />
@@ -136,8 +148,8 @@
       <div class="step-panel__body">
         <p class="step-description">
           Collecting reference data in the real world is expensive, so researchers typically sample in 
-          <strong>clusters</strong> (e.g., transects or plots). This is what creates spatial autocorrelation in the reference data, 
-          which leads to massive data leakage if spatial validation is skipped. Switch to <strong>True Random</strong> 
+          <strong>clusters</strong> (e.g., transects or plots). This creates spatial autocorrelation in the reference data, 
+          which leads to data leakage if spatial validation is skipped. Switch to <strong>True Random</strong> 
           to see how completely unclustered sampling behaves.
         </p>
         
@@ -162,7 +174,7 @@
             <div class="raster-canvas-wrap">
               <canvas id="canvas-sampling"></canvas>
             </div>
-            <div class="mt-2 text-center text-sm" style="color: #666;">Points represent collected reference data overlaid on the ground truth.</div>
+            <div class="mt-2 text-center text-sm" style="color: #666;">Points represent collected reference data overlaid on the true values.</div>
           </div>
         </div>
       </div>
@@ -175,7 +187,7 @@
       <div class="step-panel__header">
         <div class="step-panel__number">3</div>
         <h2 class="step-panel__title">Spatial Blocking &amp; Sampling Design</h2>
-        <div class="checklist-summary"><span class="check">✓</span> Table 1: Independence &amp; spatial validity</div>
+        <div class="checklist-summary"><span class="check">✓</span> Ensure spatial independence</div>
         <span class="step-panel__badge step-panel__badge--pending">Pending</span>
         <svg class="step-panel__chevron" viewBox="0 0 20 20" fill="currentColor">
           <path fill-rule="evenodd"
@@ -191,7 +203,9 @@
           By grouping pixels into blocks and splitting at the block level, we prevent this
           <span class="tech-term">data leakage<span class="tech-term__tip">Data leakage occurs when information from the test set "leaks" into training, making the model appear more accurate than it truly is on new, unseen data.</span></span>.
           Gold-highlighted blocks below are <strong>held out for validation</strong>
-          in one example iteration (~36.8% of total).
+          in one example iteration (~36.8% of total — this is the mathematical expectation
+          from bootstrap sampling, where each block has a probability of (1 − 1/N)<sup>N</sup> ≈ 1/e ≈ 36.8%
+          of never being selected).
         </p>
         <details class="tech-detail">
           <summary>Technical details</summary>
@@ -241,8 +255,8 @@
     <article class="step-panel" data-step="4">
       <div class="step-panel__header">
         <div class="step-panel__number">4</div>
-        <h2 class="step-panel__title">Repeated Cross-Validation</h2>
-        <div class="checklist-summary"><span class="check">✓</span> Table 1: Map accuracy &amp; precision</div>
+        <h2 class="step-panel__title">Model Training with Repeated Cross-Validation</h2>
+        <div class="checklist-summary"><span class="check">✓</span> Quantify map accuracy &amp; precision</div>
         <span class="step-panel__badge step-panel__badge--pending">Pending</span>
         <svg class="step-panel__chevron" viewBox="0 0 20 20" fill="currentColor">
           <path fill-rule="evenodd"
@@ -251,14 +265,14 @@
       </div>
       <div class="step-panel__body">
         <p class="step-description">
-          A single train/test split can give a misleadingly precise accuracy estimate. Instead,
+          A single train/test split can give a misleading accuracy estimate. Instead,
           draw <strong>B
           <span class="tech-term">bootstrap samples<span class="tech-term__tip">Bootstrap: a statistical resampling technique. Draw N items from your dataset with replacement to create a new sample of the same size, then repeat many times to estimate variability.</span></span></strong>
           of spatial blocks (with replacement).
           For each replicate, train a
           <span class="tech-term">Random Forest<span class="tech-term__tip">Random Forest: a machine learning algorithm that builds many decision trees on random subsets of the data, then combines their predictions by majority vote (classification) or averaging (regression).</span></span>
-          on the drawn blocks and validate on the
-          ~36.8% of blocks <em>held out for testing</em>. This produces
+          on the selected blocks and validate on the
+          ~36.8% of blocks held out. This produces
           <strong>B independent accuracy estimates</strong> from which distributions
           and
           <span class="tech-term">confidence intervals<span class="tech-term__tip">A 95% confidence interval means: if we repeated this entire process many times, 95% of the intervals would contain the true value. Wider intervals = less certainty.</span></span>
@@ -269,11 +283,11 @@
           <div class="tech-detail__body">
             <dl>
               <dt>Bootstrap resampling</dt>
-              <dd>Each replicate draws <em>N</em> blocks with replacement from the total pool of <em>N</em> blocks. On average, ~63.2% of blocks are drawn at least once (training set); the remaining ~36.8% are out-of-bag (validation set).</dd>
-              <dt>Random Forest classifier</dt>
-              <dd>An ensemble of <code>T</code> decision trees. Each tree is trained on a bootstrap sample of the training data and a random subset of features (<code>mtry = √p</code> for classification, <code>p/3</code> for regression). Predictions are combined by majority vote or averaging.</dd>
+              <dd>A bootstrap sample is created by choosing, at random, blocks with replacement from the total pool of N blocks. On average, ~63.2% of blocks are drawn at least once (training set); the remaining ~36.8% are out-of-bag (validation set).</dd>
+              <dt>Random Forest</dt>
+              <dd>An ensemble of T decision trees. Each tree is trained on a bootstrap sample of the training data and a random subset of features (mtry = √p for classification, p/3 for regression). Predictions are combined by majority vote or averaging.</dd>
               <dt>Repeat assessments (B)</dt>
-              <dd>More replicates → narrower confidence intervals → more precise accuracy estimates. 100+ replicates are recommended; 20–50 suffice for quick exploration.</dd>
+              <dd>More replicates produce narrower confidence intervals and more precise accuracy estimates. 100+ replicates are recommended; 20–50 suffice for quick exploration.</dd>
             </dl>
           </div>
         </details>
@@ -310,7 +324,7 @@
       <div class="step-panel__header">
         <div class="step-panel__number">5</div>
         <h2 class="step-panel__title">Accuracy Assessment</h2>
-        <div class="checklist-summary"><span class="check">✓</span> Table 1: Precision of map accuracy</div>
+        <div class="checklist-summary"><span class="check">✓</span> Assess accuracy with confidence intervals</div>
         <span class="step-panel__badge step-panel__badge--pending">Pending</span>
         <svg class="step-panel__chevron" viewBox="0 0 20 20" fill="currentColor">
           <path fill-rule="evenodd"
@@ -321,14 +335,20 @@
         <p class="step-description">
           Distributions of accuracy metrics across all <strong>B replicates</strong>.
           95% confidence intervals indicate the precision with which accuracy is known.
-          <span data-mode="categorical">Dashed line: 85% threshold (good accuracy). Class-wise
+          <span data-mode="categorical">Class-wise
             <span class="tech-term">user's accuracy<span class="tech-term__tip">User's Accuracy (UA): Of all pixels the map labels as class X, what proportion are actually class X? Also called precision or reliability. Answers: "If the map says it's forest, can I trust that?"</span></span> and
             <span class="tech-term">producer's accuracy<span class="tech-term__tip">Producer's Accuracy (PA): Of all pixels that truly are class X, what proportion did the map correctly identify? Also called recall or sensitivity. Answers: "How much of the real forest did the map find?"</span></span>
             &ge; 85% is considered good; &ge; 95% is excellent.</span>
-          <span data-mode="continuous">Dashed lines: threshold values
+          <span data-mode="continuous">Threshold values:
             (<span class="tech-term">R²<span class="tech-term__tip">Coefficient of determination: the proportion of variance in the true values explained by the model's predictions. R² = 1.0 is perfect; R² > 0.8 is generally considered good for remote sensing.</span></span> &gt; 0.8,
             <span class="tech-term">relative RMSE<span class="tech-term__tip">Relative Root Mean Square Error: the RMSE divided by the mean of the true values, expressed as a percentage. Lower is better; < 20% is generally acceptable.</span></span> &lt; 20%).
             Confidence intervals should not cross these thresholds.</span>
+        </p>
+        <p class="step-description" style="margin-top:8px; color:#555;">
+          <em>A large confidence interval around a high accuracy metric means that we cannot say
+          confidently that the accuracy metric truly is high. The smaller the confidence interval,
+          the more certain we can be that a map created by a single model drawn from this sample
+          gives a reliable representation of the truth.</em>
         </p>
         <details class="tech-detail">
           <summary>Technical details</summary>
@@ -350,8 +370,6 @@
           </div>
         </details>
 
-        <div id="accuracy-stats"></div>
-
         <div class="viz-grid viz-grid--3 mt-4">
           <div class="figure-container">
             <div class="figure-container__title" id="chart1-container-title"></div>
@@ -367,10 +385,18 @@
           </div>
         </div>
 
+        <details class="tech-detail mt-4">
+          <summary>Accuracy estimates (additional information)</summary>
+          <div class="tech-detail__body">
+            <div id="accuracy-stats"></div>
+          </div>
+        </details>
+
         <!-- Confusion matrix (categorical only) -->
         <div data-mode="categorical" class="mt-6">
           <div class="figure-container">
             <div class="figure-container__title" id="confmat-title">Mean Error Matrix</div>
+            <p style="font-size:0.85rem; color:#666; margin:4px 0 8px;">Each bootstrap replicate produces its own error matrix. The values shown below are averages across all B replicates.</p>
             <div id="confusion-matrix-container"></div>
           </div>
         </div>
@@ -419,7 +445,7 @@
       <div class="step-panel__header">
         <div class="step-panel__number">6</div>
         <h2 class="step-panel__title">Summary Statistics &amp; Uncertainty</h2>
-        <div class="checklist-summary"><span class="check">✓</span> Table 1: Error-corrected summary statistics</div>
+        <div class="checklist-summary"><span class="check">✓</span> Error-corrected summary statistics</div>
         <span class="step-panel__badge step-panel__badge--pending">Pending</span>
         <svg class="step-panel__chevron" viewBox="0 0 20 20" fill="currentColor">
           <path fill-rule="evenodd"
@@ -442,6 +468,13 @@
             quantifies uncertainty, and is compared against the known true total.
           </span>
         </p>
+        <p class="step-description" style="margin-top:8px; color:#555;">
+          <em>Large confidence intervals mean that we have very little idea of the true value,
+          with intervals sometimes spanning orders of magnitude. Over- or underestimating
+          map-derived variables, such as the extent of forest or total biomass, to this extent
+          is likely to have significant implications for conservation decisions or downstream
+          analyses that use this data.</em>
+        </p>
         <details class="tech-detail">
           <summary>Technical details</summary>
           <div class="tech-detail__body">
@@ -460,11 +493,11 @@
 
         <div id="summary-stats"></div>
 
-        <div class="viz-grid viz-grid--3 mt-4">
-          <div class="figure-container">
-            <div class="figure-container__title" id="summary-chart-title"></div>
-            <div class="chart-wrap"><canvas id="chart-area-dist"></canvas></div>
-          </div>
+        <div id="summary-charts-container" class="mt-4">
+          <!-- Per-class area distribution charts populated by JS -->
+        </div>
+
+        <div class="viz-grid viz-grid--2 mt-4">
           <div class="figure-container">
             <div class="figure-container__title">Mean Prediction Map</div>
             <div class="raster-canvas-wrap">
@@ -528,11 +561,16 @@
       <strong>Spatial Mapping Standards Interactive Demonstrator</strong><br>
       Companion to: Schulte to Bühne, H., Williams, J., Byrne, A. &amp; Pettorelli, N. (2026).
       A mapping standard for conservation. <em>Methods in Ecology and Evolution</em>.
+      <a href="#" style="color:var(--zsl-green-mid);">[DOI: pending]</a>
     </p>
     <p class="site-footer__line">
       ZSL Institute of Zoology &nbsp;|&nbsp;
-      Methodology follows Olofsson et al. (2014), spatial cross-validation best practices,
-      and bootstrap estimation of accuracy precision.
+      This tool accompanies the conservation mapping standard but is designed to be applicable to any spatial mapping context.
+      See our paper for additional information about best validation practice demonstrated here.
+    </p>
+    <p class="site-footer__line">
+      Codebase: <a href="https://github.com/J-Cos/conservation-mapping-standards" style="color:var(--zsl-green-mid);">github.com/J-Cos/conservation-mapping-standards</a>.
+      Demonstrator developed using an agentic AI pair-programming workflow (Claude Opus 4.6 &amp; Gemini 3.1 Pro), unit-tested, and human-validated.
     </p>
     <p class="site-footer__line">
       All computation runs locally in your browser. No data is sent to any server.

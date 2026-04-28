@@ -142,8 +142,8 @@ const RasterViz = (() => {
         }
 
         // Draw grid
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
-        ctx.lineWidth = 0.5;
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+        ctx.lineWidth = 1.5;
         for (let x = 0; x <= width; x += blockSize) {
             ctx.beginPath();
             ctx.moveTo(x * scaleX, 0);
@@ -170,10 +170,10 @@ const RasterViz = (() => {
             const c = classColors ? classColors[classData[pointIndices[i]]] : [255, 255, 255];
 
             ctx.fillStyle = `rgb(${c[0]},${c[1]},${c[2]})`;
-            ctx.strokeStyle = 'rgba(0,0,0,0.5)';
-            ctx.lineWidth = 0.5;
+            ctx.strokeStyle = 'rgba(0,0,0,0.6)';
+            ctx.lineWidth = 1;
             ctx.beginPath();
-            ctx.arc(px * scaleX, py * scaleY, 2, 0, Math.PI * 2);
+            ctx.arc(px * scaleX, py * scaleY, 3.5, 0, Math.PI * 2);
             ctx.fill();
             ctx.stroke();
         }

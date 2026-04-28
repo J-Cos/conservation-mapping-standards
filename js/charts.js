@@ -67,7 +67,7 @@ const PNASCharts = (() => {
     }
 
     /* --- Histogram --- */
-    function histogram(canvasId, values, { title, xLabel, yLabel, color, bins = 20, thresholdLine = null, trueLine = null } = {}) {
+    function histogram(canvasId, values, { title, xLabel, yLabel, color, bins = 20, thresholdLine = null, thresholdLabel = null, trueLine = null } = {}) {
         const canvas = document.getElementById(canvasId);
         if (!canvas) return null;
 
@@ -117,6 +117,13 @@ const PNASCharts = (() => {
                     ctx.moveTo(xPos, chart.chartArea.top);
                     ctx.lineTo(xPos, chart.chartArea.bottom);
                     ctx.stroke();
+                    // Draw label
+                    const labelText = thresholdLabel || (thresholdLine < 1 ? thresholdLine.toFixed(1) : thresholdLine + '%');
+                    ctx.fillStyle = '#EE6677';
+                    ctx.font = '10px Inter, sans-serif';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'bottom';
+                    ctx.fillText(labelText, xPos, chart.chartArea.top - 2);
                     ctx.restore();
                 }
             });

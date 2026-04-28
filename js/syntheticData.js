@@ -77,7 +77,7 @@ const SyntheticData = (() => {
     }
 
     /* --- Generate multi-band raster --- */
-    function generateBands(seed = 42) {
+    function generateBands(seed = 42, sensorNoise = 0.04) {
         const totalPixels = WIDTH * HEIGHT;
         // Flat array: bands[band * totalPixels + pixelIndex]
         const bands = new Float32Array(NUM_BANDS * totalPixels);
@@ -138,7 +138,7 @@ const SyntheticData = (() => {
         noisyBands.set(bands); // copy first
         let noiseRng = seed + 999;
         const noiseRand = () => { noiseRng = (noiseRng * 1664525 + 1013904223) & 0x7FFFFFFF; return noiseRng / 0x7FFFFFFF; };
-        const NOISE_LEVEL = 0.04; // 6% additive noise — realistic sensor measurement error
+        const NOISE_LEVEL = sensorNoise; // sensor measurement error level
         for (let b = 0; b < NUM_BANDS; b++) {
             const offset = b * totalPixels;
             for (let i = 0; i < totalPixels; i++) {
@@ -193,7 +193,7 @@ const SyntheticData = (() => {
     }
 
     /* --- Generate continuous ground truth (biomass 0-500 Mg/ha) --- */
-    function generateContinuousTruth(bands) {
+    function generateContinuousTruth(bands, biomassNoise = 0.06) {
         const totalPixels = WIDTH * HEIGHT;
         const biomass = new Float32Array(totalPixels);
         // Simple LCG for reproducible noise
@@ -217,7 +217,7 @@ const SyntheticData = (() => {
             );
 
             // Add heteroscedastic noise (more noise at higher biomass)
-            const noise = (rand() - 0.5) * 0.06 * b;
+            const noise = (rand() - 0.5) * biomassNoise * b;
             b = Math.max(0, Math.min(500, b + noise));
             biomass[i] = b;
         }
@@ -294,11 +294,16 @@ const SyntheticData = (() => {
     }
 
     /* --- Main generation interface --- */
-    function generateLandscape(seed = 42) {
-        const { bands, noisyBands, bandConfigs } = generateBands(seed);
+    function generateLandscape(seed = 42, noiseLevel = 'medium') {
+        const noiseLevels = { low: 0.02, medium: 0.04, high: 0.08 };
+        const biomassNoiseLevels = { low: 0.03, medium: 0.06, high: 0.12 };
+        const sensorNoise = noiseLevels[noiseLevel] || 0.04;
+        const biomassNoise = biomassNoiseLevels[noiseLevel] || 0.06;
+        
+        const { bands, noisyBands, bandConfigs } = generateBands(seed, sensorNoise);
         // Ground truth uses CLEAN bands (true spectral values)
         const categoricalTruth = generateCategoricalTruth(bands, seed);
-        const continuousTruth = generateContinuousTruth(bands);
+        const continuousTruth = generateContinuousTruth(bands, biomassNoise);
 
         // Compute class distribution
         const classCounts = new Uint32Array(NUM_CLASSES);

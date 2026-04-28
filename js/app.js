@@ -163,8 +163,10 @@ const App = (() => {
         // Use setTimeout to allow UI to update
         setTimeout(() => {
             const seed = parseInt(document.getElementById('cfg-seed')?.value) || state.config.seed;
+            const noiseLevel = document.getElementById('cfg-noise')?.value || 'medium';
+            state.config.noiseLevel = noiseLevel;
 
-            state.data = SyntheticData.generateLandscape(seed);
+            state.data = SyntheticData.generateLandscape(seed, noiseLevel);
             renderStep1();
 
             btn.disabled = false;
@@ -673,6 +675,7 @@ const App = (() => {
             color: '#2D6A4F',
             bins: 25,
             thresholdLine: 0.85,
+            thresholdLabel: 'Good (85%)',
             trueLine: trueOAMean,
         });
 
@@ -732,6 +735,7 @@ const App = (() => {
             color: '#2D6A4F',
             bins: 25,
             thresholdLine: 0.8,
+            thresholdLabel: 'Good (0.8)',
             trueLine: trueR2Mean,
         });
 
@@ -755,6 +759,7 @@ const App = (() => {
             color: '#EE6677',
             bins: 25,
             thresholdLine: 0.2,
+            thresholdLabel: 'Max (20%)',
             trueLine: trueRelRmseMean,
         });
 
@@ -869,9 +874,9 @@ const App = (() => {
         // Uncorrected (raw prediction counts)
         const rawAreas = d.classNames.map((_, c) => results.map(r => r.metrics.predictedCounts[c]));
 
-        // Summary stats
+        // Summary stats cards (in collapsible)
         const statsEl = document.getElementById('summary-stats');
-        let html = `<div class="info-alert"><strong>Key:</strong> The main value is the <span style="color:var(--zsl-green-dark);font-weight:600">error-corrected estimate</span> with 95% CI. <span style="color:#EE6677;font-weight:600">Naive</span> = uncorrected pixel count. <strong>True</strong> = known ground truth. Look for where naive estimates diverge from the truth.</div>`;
+        let html = `<div class="info-alert"><strong>Key:</strong> The main value is the <span style="color:var(--zsl-green-dark);font-weight:600">error-corrected estimate</span> with 95% CI. <span style="color:#EE6677;font-weight:600">Naive</span> = uncorrected pixel count. <strong>True</strong> = known true value. Look for where naive estimates diverge from the truth.</div>`;
 
         html += `<div class="stats-row">`;
         for (let c = 0; c < nc; c++) {
@@ -880,10 +885,7 @@ const App = (() => {
             const truePct = (trueProps[c] * 100).toFixed(1);
             const estPct = (stats.mean / totalPixels * 100).toFixed(1);
             const ciPct = `[${(stats.ci95[0] / totalPixels * 100).toFixed(1)}, ${(stats.ci95[1] / totalPixels * 100).toFixed(1)}]`;
-            // Naive estimate: proportion of OOB predictions in this class (no error correction)
-            // This is what "counting pixels" gives you — the raw predicted class proportions
             const meanRaw = rawAreas[c].reduce((a,b) => a+b, 0) / rawAreas[c].length;
-            // Sum all class counts for this replicate to get total OOB predictions
             const totalOOBMean = d.classNames.reduce((sum, _, k) => {
                 return sum + rawAreas[k].reduce((a,b) => a+b, 0) / rawAreas[k].length;
             }, 0);
@@ -901,16 +903,44 @@ const App = (() => {
         html += `</div>`;
         statsEl.innerHTML = html;
 
-        // Area distribution for largest class
-        const largestClass = trueProps.indexOf(Math.max(...trueProps));
+        // Per-class histograms (H25/H27)
+        const chartsContainer = document.getElementById('summary-charts-container');
+        if (chartsContainer) {
+            // Destroy old per-class charts
+            if (state.charts.areaDistPerClass) {
+                state.charts.areaDistPerClass.forEach(c => PNASCharts.destroy(c));
+            }
+            state.charts.areaDistPerClass = [];
+
+            // Build dynamic grid
+            let gridHtml = `<div class="viz-grid viz-grid--3">`;
+            for (let c = 0; c < nc; c++) {
+                gridHtml += `
+                <div class="figure-container">
+                    <div class="figure-container__title">Corrected Area: ${d.classNames[c]}</div>
+                    <div class="chart-wrap"><canvas id="chart-area-class-${c}"></canvas></div>
+                </div>`;
+            }
+            gridHtml += `</div>`;
+            chartsContainer.innerHTML = gridHtml;
+
+            // Render histograms
+            for (let c = 0; c < nc; c++) {
+                const areasPct = correctedAreas[c].map(v => v / totalPixels * 100);
+                const truePct = trueProps[c] * 100;
+                const chart = PNASCharts.histogram(`chart-area-class-${c}`, areasPct, {
+                    xLabel: 'Corrected Area (%)',
+                    yLabel: 'Frequency',
+                    color: PNASCharts.CLASS_PALETTE[c],
+                    bins: 20,
+                    trueLine: truePct,
+                });
+                state.charts.areaDistPerClass.push(chart);
+            }
+        }
+
+        // Legacy: also destroy old single chart if any
         PNASCharts.destroy(state.charts.areaDist);
-        document.getElementById('summary-chart-title').textContent = `Corrected Area: ${d.classNames[largestClass]}`;
-        state.charts.areaDist = PNASCharts.histogram('chart-area-dist', correctedAreas[largestClass].map(v => v / totalPixels * 100), {
-            xLabel: 'Corrected Area (%)',
-            yLabel: 'Frequency',
-            color: PNASCharts.CLASS_PALETTE[largestClass],
-            bins: 25,
-        });
     }
 
     function renderContinuousSummary() {
@@ -956,14 +986,22 @@ const App = (() => {
 
         // Predicted total biomass distribution with true total as reference line
         PNASCharts.destroy(state.charts.areaDist);
-        document.getElementById('summary-chart-title').textContent = 'Predicted Total Biomass Distribution';
-        if (predictedTotals.length > 0) {
-            state.charts.areaDist = PNASCharts.histogram('chart-area-dist', predictedTotals.map(v => v / 1e6), {
+        const chartsContainer = document.getElementById('summary-charts-container');
+        if (chartsContainer && predictedTotals.length > 0) {
+            chartsContainer.innerHTML = `
+                <div class="viz-grid viz-grid--1">
+                    <div class="figure-container" style="max-width:600px; margin:0 auto;">
+                        <div class="figure-container__title">Predicted Total Biomass Distribution</div>
+                        <div class="chart-wrap"><canvas id="chart-area-dist-dynamic"></canvas></div>
+                    </div>
+                </div>`;
+            state.charts.areaDist = PNASCharts.histogram('chart-area-dist-dynamic', predictedTotals.map(v => v / 1e6), {
                 xLabel: 'Predicted Total Biomass (M Mg)',
                 yLabel: 'Frequency',
                 color: '#228833',
                 bins: 25,
-                thresholdLine: trueTotal / 1e6,
+                trueLine: trueTotal / 1e6,
+                thresholdLabel: 'True total',
             });
         }
     }
@@ -1402,6 +1440,7 @@ const App = (() => {
                 color: '#EE6677',
                 bins: 15,
                 thresholdLine: 0.85,
+                thresholdLabel: 'Good (85%)',
                 trueLine: trueOAMean,
             });
 
@@ -1425,18 +1464,36 @@ const App = (() => {
             });
 
             // Summary comparison stats
-            const inflation = ((pitfallOAStats.mean - spatialOAStats.mean) * 100).toFixed(1);
-            const trueText = trueOAMean !== null ? `<br><br><em>Reality Check:</em> The <b>true</b> accuracy of the map across the entire landscape was actually only <b>${(trueOAMean*100).toFixed(1)}%</b>. The spatial-blocking method safely covered this reality, but the random-split method dangerously overestimated it!` : '';
+            const inflationVal = (pitfallOAStats.mean - spatialOAStats.mean) * 100;
+            const inflation = inflationVal.toFixed(1);
+            let trueText = '';
+            if (trueOAMean !== null) {
+                const trueOAPct = (trueOAMean * 100).toFixed(1);
+                if (trueOAMean < pitfallOAStats.mean) {
+                    trueText = `<br><br><em>Reality Check:</em> The <b>true</b> accuracy of the map across the entire landscape was actually only <b>${trueOAPct}%</b>. The spatial-blocking method safely covered this reality, but the random-split method overestimated it.`;
+                } else {
+                    trueText = `<br><br><em>Reality Check:</em> The <b>true</b> accuracy of the map across the entire landscape was <b>${trueOAPct}%</b>. In this case, the random-split estimate was not inflated, but the spatial-blocking method remains the methodologically correct approach.`;
+                }
+            }
 
             const statsEl = document.getElementById('pitfall-stats');
             if (statsEl) {
-                statsEl.innerHTML = `
-                    <div class="info-alert info-alert--warning">
-                        <strong>Result:</strong> Random pixel-level splitting inflated the estimated accuracy by
+                let resultText;
+                if (inflationVal > 0.5) {
+                    resultText = `<strong>Result:</strong> Random pixel-level splitting inflated the estimated accuracy by
                         <strong>+${inflation} percentage points</strong>
                         (${(pitfallOAStats.mean * 100).toFixed(1)}% vs ${(spatialOAStats.mean * 100).toFixed(1)}% with spatial blocking).
                         This is because nearby pixels that are very similar to each other end up in both training
-                        and test sets, making the model appear more accurate than it truly is.
+                        and test sets, making the model appear more accurate than it truly is.`;
+                } else {
+                    resultText = `<strong>Result:</strong> In this case, random splitting did not substantially inflate accuracy
+                        (${(pitfallOAStats.mean * 100).toFixed(1)}% vs ${(spatialOAStats.mean * 100).toFixed(1)}% with spatial blocking).
+                        However, this does not mean spatial blocking is unnecessary — with different data or sampling strategies,
+                        random splitting routinely overestimates accuracy.`;
+                }
+                statsEl.innerHTML = `
+                    <div class="info-alert info-alert--warning">
+                        ${resultText}
                         ${trueText}
                     </div>
                 `;
@@ -1455,6 +1512,7 @@ const App = (() => {
                 color: '#EE6677',
                 bins: 15,
                 thresholdLine: 0.8,
+                thresholdLabel: 'Good (0.8)',
                 trueLine: trueR2Mean,
             });
 
@@ -1478,23 +1536,41 @@ const App = (() => {
                 color: '#EE6677',
                 bins: 15,
                 thresholdLine: 0.2,
+                thresholdLabel: 'Max (20%)',
             });
 
             const spatialR2Stats = PNASCharts.summaryStats(spatialR2);
             const pitfallR2Stats = PNASCharts.summaryStats(pitfallR2);
-            const r2Inflation = ((pitfallR2Stats.mean - spatialR2Stats.mean) * 100).toFixed(1);
-            const trueText = trueR2Mean !== null ? `<br><br><em>Reality Check:</em> The <b>true</b> R² of the map across the entire landscape was actually only <b>${trueR2Mean.toFixed(3)}</b>. The spatial-blocking method safely covered this reality, but the random-split method dangerously overestimated it!` : '';
+            const r2InflationVal = pitfallR2Stats.mean - spatialR2Stats.mean;
+            const r2Inflation = (r2InflationVal * 100).toFixed(1);
+            let trueText = '';
+            if (trueR2Mean !== null) {
+                if (trueR2Mean < pitfallR2Stats.mean) {
+                    trueText = `<br><br><em>Reality Check:</em> The <b>true</b> R² of the map across the entire landscape was actually only <b>${trueR2Mean.toFixed(3)}</b>. The spatial-blocking method safely covered this reality, but the random-split method overestimated it.`;
+                } else {
+                    trueText = `<br><br><em>Reality Check:</em> The <b>true</b> R² of the map was <b>${trueR2Mean.toFixed(3)}</b>. In this case, the random-split estimate was not inflated, but the spatial-blocking method remains the methodologically correct approach.`;
+                }
+            }
 
             const statsEl = document.getElementById('pitfall-stats');
             if (statsEl) {
-                statsEl.innerHTML = `
-                    <div class="info-alert info-alert--warning">
-                        <strong>Result:</strong> Random pixel-level splitting inflated R² by
+                let resultText;
+                if (r2InflationVal > 0.005) {
+                    resultText = `<strong>Result:</strong> Random pixel-level splitting inflated R² by
                         <strong>+${r2Inflation} percentage points</strong>
                         (${pitfallR2Stats.mean.toFixed(3)} vs ${spatialR2Stats.mean.toFixed(3)} with spatial blocking).
                         Without spatial blocking, the model memorises local spatial patterns rather than
                         learning generalisable spectral-biomass relationships.
-                        <strong>A map validated this way would not meet the mapping standard.</strong>
+                        <strong>A map validated this way would not meet the mapping standard.</strong>`;
+                } else {
+                    resultText = `<strong>Result:</strong> In this case, random splitting did not substantially inflate R²
+                        (${pitfallR2Stats.mean.toFixed(3)} vs ${spatialR2Stats.mean.toFixed(3)} with spatial blocking).
+                        However, this does not mean spatial blocking is unnecessary — with different data,
+                        random splitting routinely overestimates accuracy.`;
+                }
+                statsEl.innerHTML = `
+                    <div class="info-alert info-alert--warning">
+                        ${resultText}
                         ${trueText}
                     </div>
                 `;
@@ -1685,23 +1761,36 @@ const App = (() => {
               </div>
             `;
             
+            let lowAccNote = '';
+            if (estOA < 70) {
+                lowAccNote = ' The overall accuracy is quite low — this may reflect high sensor noise, insufficient reference data, or a genuinely difficult mapping problem.';
+            }
+
             if (strategy === 'random') {
-                conclusion = `<strong>Great!</strong> Because you used <strong>True Random</strong> sampling, your reference data was completely unclustered. As a result, your expected accuracy (${estOA.toFixed(1)}%) is almost perfectly aligned with the actual map accuracy (${trueOA.toFixed(1)}%). Any form of cross-validation works well with perfectly random data.`;
+                conclusion = `<strong>Great!</strong> Because you used <strong>True Random</strong> sampling, your reference data was completely unclustered. As a result, your expected accuracy (${estOA.toFixed(1)}%) is almost perfectly aligned with the actual map accuracy (${trueOA.toFixed(1)}%). Any form of cross-validation works well with perfectly random data.${lowAccNote}`;
                 grade = 'A+';
                 gradeEl.style.backgroundColor = '#2D6A4F';
             } else {
-                if (Math.abs(diff) < 2.0) {
-                    conclusion = `<strong>Success!</strong> Even though your field data was collected in realistic <strong>clusters</strong>, using <strong>Spatial Blocking</strong> successfully prevented data leakage. Your estimated accuracy (${estOA.toFixed(1)}%) closely matches the map's true performance (${trueOA.toFixed(1)}%).`;
+                if (diff > 2.0) {
+                    // Conservative: estimated < true (underestimate)
+                    conclusion = `<strong>Good.</strong> Your spatial blocking gave a <strong>conservative</strong> accuracy estimate — the map actually performed better (${trueOA.toFixed(1)}%) than the cross-validation suggested (${estOA.toFixed(1)}%). This is the safe direction: the map is better than advertised.${lowAccNote}`;
                     grade = 'PASS';
                     gradeEl.style.backgroundColor = '#2D6A4F';
-                } else if (diff < -5.0) {
-                    conclusion = `<strong>Warning!</strong> Your estimated accuracy (${estOA.toFixed(1)}%) is significantly higher than the true accuracy (${trueOA.toFixed(1)}%). Because your data was highly <strong>clustered</strong>, the block size you chose (${state.config.blockSize}) might have been too small, allowing some spatial autocorrelation to leak between blocks and artificially inflate your estimate.`;
+                } else if (Math.abs(diff) <= 2.0) {
+                    // Close match
+                    conclusion = `<strong>Success!</strong> Even though your field data was collected in realistic <strong>clusters</strong>, using <strong>Spatial Blocking</strong> successfully prevented data leakage. Your estimated accuracy (${estOA.toFixed(1)}%) closely matches the map's true performance (${trueOA.toFixed(1)}%).${lowAccNote}`;
+                    grade = 'PASS';
+                    gradeEl.style.backgroundColor = '#2D6A4F';
+                } else if (diff >= -5.0) {
+                    // Mild overestimate
+                    conclusion = `<strong>Caution.</strong> Your estimated accuracy (${estOA.toFixed(1)}%) is somewhat higher than the true accuracy (${trueOA.toFixed(1)}%). Consider increasing block size or collecting more reference data.${lowAccNote}`;
+                    grade = 'WARN';
+                    gradeEl.style.backgroundColor = '#f6c23e';
+                } else {
+                    // Severe overestimate
+                    conclusion = `<strong>Warning!</strong> Your estimated accuracy (${estOA.toFixed(1)}%) is significantly higher than the true accuracy (${trueOA.toFixed(1)}%). Because your data was highly <strong>clustered</strong>, the block size you chose (${state.config.blockSize}) might have been too small, allowing some spatial autocorrelation to leak between blocks and artificially inflate your estimate.${lowAccNote}`;
                     grade = 'FAIL';
                     gradeEl.style.backgroundColor = '#EE6677';
-                } else {
-                    conclusion = `<strong>Good.</strong> Your spatial blocking effectively estimated the map's performance without dramatic overestimation.`;
-                    grade = 'PASS';
-                    gradeEl.style.backgroundColor = '#2D6A4F';
                 }
             }
         } else {
@@ -1724,19 +1813,36 @@ const App = (() => {
               </div>
             `;
             
+            let lowAccNote = '';
+            if (estR2 < 0.5) {
+                lowAccNote = ' The R² is quite low — this may reflect high sensor noise, insufficient reference data, or a genuinely difficult mapping problem.';
+            }
+
             if (strategy === 'random') {
-                conclusion = `<strong>Great!</strong> Because you used <strong>True Random</strong> sampling, your expected accuracy (${estR2.toFixed(3)}) perfectly matches reality (${trueR2.toFixed(3)}).`;
+                conclusion = `<strong>Great!</strong> Because you used <strong>True Random</strong> sampling, your expected R² (${estR2.toFixed(3)}) closely matches reality (${trueR2.toFixed(3)}).${lowAccNote}`;
                 grade = 'A+';
                 gradeEl.style.backgroundColor = '#2D6A4F';
             } else {
-                if (Math.abs(diff) < 0.05) {
-                    conclusion = `<strong>Success!</strong> Spatial Blocking successfully mitigated the spatial clustering in your data. Your estimated R² (${estR2.toFixed(3)}) closely matches reality (${trueR2.toFixed(3)}).`;
+                if (diff > 0.05) {
+                    // Conservative: estimated < true (underestimate)
+                    conclusion = `<strong>Good.</strong> Your spatial blocking gave a <strong>conservative</strong> R² estimate — the map actually performs better (${trueR2.toFixed(3)}) than the cross-validation suggested (${estR2.toFixed(3)}). This is the safe direction: the map is better than advertised.${lowAccNote}`;
                     grade = 'PASS';
                     gradeEl.style.backgroundColor = '#2D6A4F';
-                } else {
-                    conclusion = `<strong>Warning!</strong> The estimate was slightly inflated. Your block size might need increasing.`;
+                } else if (Math.abs(diff) <= 0.05) {
+                    // Close match
+                    conclusion = `<strong>Success!</strong> Spatial Blocking successfully mitigated the spatial clustering in your data. Your estimated R² (${estR2.toFixed(3)}) closely matches reality (${trueR2.toFixed(3)}).${lowAccNote}`;
+                    grade = 'PASS';
+                    gradeEl.style.backgroundColor = '#2D6A4F';
+                } else if (diff >= -0.1) {
+                    // Mild overestimate
+                    conclusion = `<strong>Caution.</strong> Your R² estimate (${estR2.toFixed(3)}) is somewhat higher than the true R² (${trueR2.toFixed(3)}). Consider increasing block size or collecting more reference data.${lowAccNote}`;
                     grade = 'WARN';
                     gradeEl.style.backgroundColor = '#f6c23e';
+                } else {
+                    // Severe overestimate
+                    conclusion = `<strong>Warning!</strong> Your R² estimate (${estR2.toFixed(3)}) significantly overestimates the map's true performance (${trueR2.toFixed(3)}). Your block size might need increasing to prevent spatial leakage.${lowAccNote}`;
+                    grade = 'FAIL';
+                    gradeEl.style.backgroundColor = '#EE6677';
                 }
             }
         }
