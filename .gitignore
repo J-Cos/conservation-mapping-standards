@@ -11,3 +11,6 @@ __pycache__/
 # OS files
 .DS_Store
 Thumbs.db
+
+# Reviewer feedback (not part of the web app)
+SchulteToBuhneFeedback/
