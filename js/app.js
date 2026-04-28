@@ -1432,8 +1432,13 @@ const App = (() => {
             const pitfallTrueAccuracies = pitfallResults.filter(r => r.trueMetrics).map(r => r.trueMetrics.overallAccuracy);
             const trueOAMean = pitfallTrueAccuracies.length ? (pitfallTrueAccuracies.reduce((a,b)=>a+b,0)/pitfallTrueAccuracies.length) : null;
 
+            // Summary comparison stats (computed early for chart title)
+            const inflationVal = (pitfallOAStats.mean - spatialOAStats.mean) * 100;
+            const inflation = inflationVal.toFixed(1);
+
             // Chart 1: Side-by-side overall accuracy
-            document.getElementById('pitfall-chart1-title').textContent = 'Overall Accuracy: Random Split (Inflated!)';
+            const pitfallTitle1 = inflationVal > 0.5 ? 'Overall Accuracy: Random Split (Inflated!)' : 'Overall Accuracy: Random Split';
+            document.getElementById('pitfall-chart1-title').textContent = pitfallTitle1;
             state.charts.pitfall1 = PNASCharts.histogram('chart-pitfall-1', pitfallOA, {
                 xLabel: 'Overall Accuracy',
                 yLabel: 'Frequency',
@@ -1462,15 +1467,11 @@ const App = (() => {
                 xLabels: d.classNames,
                 yLabel: 'Accuracy',
             });
-
-            // Summary comparison stats
-            const inflationVal = (pitfallOAStats.mean - spatialOAStats.mean) * 100;
-            const inflation = inflationVal.toFixed(1);
             let trueText = '';
             if (trueOAMean !== null) {
                 const trueOAPct = (trueOAMean * 100).toFixed(1);
                 if (trueOAMean < pitfallOAStats.mean) {
-                    trueText = `<br><br><em>Reality Check:</em> The <b>true</b> accuracy of the map across the entire landscape was actually only <b>${trueOAPct}%</b>. The spatial-blocking method safely covered this reality, but the random-split method overestimated it.`;
+                    trueText = `<br><br><em>Reality Check:</em> The <b>true</b> accuracy of the map across the entire landscape was actually only <b>${trueOAPct}%</b>. The spatial-blocking estimate was closer to this reality, but the random-split method overestimated it.`;
                 } else {
                     trueText = `<br><br><em>Reality Check:</em> The <b>true</b> accuracy of the map across the entire landscape was <b>${trueOAPct}%</b>. In this case, the random-split estimate was not inflated, but the spatial-blocking method remains the methodologically correct approach.`;
                 }
@@ -1505,7 +1506,13 @@ const App = (() => {
             const pitfallTrueAccuracies = pitfallResults.filter(r => r.trueMetrics).map(r => r.trueMetrics.r2);
             const trueR2Mean = pitfallTrueAccuracies.length ? (pitfallTrueAccuracies.reduce((a,b)=>a+b,0)/pitfallTrueAccuracies.length) : null;
 
-            document.getElementById('pitfall-chart1-title').textContent = 'R² Distribution: Random Split (Inflated!)';
+            const spatialR2Stats = PNASCharts.summaryStats(spatialR2);
+            const pitfallR2Stats = PNASCharts.summaryStats(pitfallR2);
+            const r2InflationVal = pitfallR2Stats.mean - spatialR2Stats.mean;
+            const r2Inflation = (r2InflationVal * 100).toFixed(1);
+
+            const pitfallTitle1 = r2InflationVal > 0.005 ? 'R² Distribution: Random Split (Inflated!)' : 'R² Distribution: Random Split';
+            document.getElementById('pitfall-chart1-title').textContent = pitfallTitle1;
             state.charts.pitfall1 = PNASCharts.histogram('chart-pitfall-1', pitfallR2, {
                 xLabel: 'R²',
                 yLabel: 'Frequency',
@@ -1538,15 +1545,10 @@ const App = (() => {
                 thresholdLine: 0.2,
                 thresholdLabel: 'Max (20%)',
             });
-
-            const spatialR2Stats = PNASCharts.summaryStats(spatialR2);
-            const pitfallR2Stats = PNASCharts.summaryStats(pitfallR2);
-            const r2InflationVal = pitfallR2Stats.mean - spatialR2Stats.mean;
-            const r2Inflation = (r2InflationVal * 100).toFixed(1);
             let trueText = '';
             if (trueR2Mean !== null) {
                 if (trueR2Mean < pitfallR2Stats.mean) {
-                    trueText = `<br><br><em>Reality Check:</em> The <b>true</b> R² of the map across the entire landscape was actually only <b>${trueR2Mean.toFixed(3)}</b>. The spatial-blocking method safely covered this reality, but the random-split method overestimated it.`;
+                    trueText = `<br><br><em>Reality Check:</em> The <b>true</b> R² of the map across the entire landscape was actually only <b>${trueR2Mean.toFixed(3)}</b>. The spatial-blocking estimate was closer to this reality, but the random-split method overestimated it.`;
                 } else {
                     trueText = `<br><br><em>Reality Check:</em> The <b>true</b> R² of the map was <b>${trueR2Mean.toFixed(3)}</b>. In this case, the random-split estimate was not inflated, but the spatial-blocking method remains the methodologically correct approach.`;
                 }
@@ -1557,7 +1559,7 @@ const App = (() => {
                 let resultText;
                 if (r2InflationVal > 0.005) {
                     resultText = `<strong>Result:</strong> Random pixel-level splitting inflated R² by
-                        <strong>+${r2Inflation} percentage points</strong>
+                        <strong>+${r2Inflation} points</strong>
                         (${pitfallR2Stats.mean.toFixed(3)} vs ${spatialR2Stats.mean.toFixed(3)} with spatial blocking).
                         Without spatial blocking, the model memorises local spatial patterns rather than
                         learning generalisable spectral-biomass relationships.

@@ -406,7 +406,7 @@
           <div class="info-alert info-alert--warning">
             <strong>⚠️ What if we skipped spatial blocking?</strong>
             Below: the same model evaluated with <em>random pixel-level splitting</em> instead of spatial blocks.
-            Accuracy appears much higher because spatially correlated pixels leak between training and test sets.
+            Compare these results to the spatial blocking estimates above to see whether accuracy estimates change.
           </div>
           <div class="viz-grid viz-grid--3 mt-4">
             <div class="figure-container">
@@ -538,7 +538,7 @@
             <span id="report-card-grade" style="font-size: 1.5rem; background: rgba(255,255,255,0.2); padding: 4px 12px; border-radius: 4px;">PASS</span>
           </div>
           <div style="padding: 20px;">
-            <p style="margin-top: 0; color: #444; margin-bottom: 16px;">Because this is a synthetic landscape, we know the <strong>true class or value of every pixel</strong>. The "True Landscape" metric below is calculated by applying the trained model to an independent set of 10,000 randomly sampled pixels that were never used in training or cross-validation, then comparing predictions to the known ground truth. This lets us check whether the cross-validation estimate (left) is a realistic measure of actual map performance (right).</p>
+            <p style="margin-top: 0; color: #444; margin-bottom: 16px;">Because this is a synthetic landscape, we know the <strong>true class or value of every pixel</strong>. The "True Landscape" metric below is calculated by applying the trained model to an independent set of 10,000 randomly sampled pixels that were never used in training or cross-validation, then comparing predictions to the known true values. This lets us check whether the cross-validation estimate (left) is a realistic measure of actual map performance (right).</p>
             
             <div id="report-card-metrics" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 20px;">
               <!-- Populated by JS -->
