@@ -1,5 +1,5 @@
 /* ============================================================
-   Spatial Mapping Standards Web App
+   Conservation Map Standards Web App
    Design System: ZSL Institute of Zoology + PNAS Figure Style
    ============================================================ */
 
@@ -346,7 +346,6 @@ body {
   color: var(--text-secondary);
   margin-bottom: var(--space-6);
   line-height: 1.7;
-  max-width: 680px;
 }
 
 .step-description strong {

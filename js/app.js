@@ -928,12 +928,20 @@ const App = (() => {
             for (let c = 0; c < nc; c++) {
                 const areasPct = correctedAreas[c].map(v => v / totalPixels * 100);
                 const truePct = trueProps[c] * 100;
+                // Naive area: mean raw pixel count as percentage of total OOB pixels
+                const meanRaw = rawAreas[c].reduce((a,b) => a+b, 0) / rawAreas[c].length;
+                const totalOOBMean = d.classNames.reduce((sum, _, k) => {
+                    return sum + rawAreas[k].reduce((a,b) => a+b, 0) / rawAreas[k].length;
+                }, 0);
+                const naivePct = (meanRaw / totalOOBMean) * 100;
                 const chart = PNASCharts.histogram(`chart-area-class-${c}`, areasPct, {
                     xLabel: 'Corrected Area (%)',
                     yLabel: 'Frequency',
                     color: PNASCharts.CLASS_PALETTE[c],
                     bins: 20,
                     trueLine: truePct,
+                    thresholdLine: naivePct,
+                    thresholdLabel: 'Naive',
                 });
                 state.charts.areaDistPerClass.push(chart);
             }
@@ -984,6 +992,13 @@ const App = (() => {
         html += `</div>`;
         statsEl.innerHTML = html;
 
+        // Naive total biomass estimate: sample mean * total pixels
+        const d2 = state.data;
+        const sampleIndices = d2.trainingIndices;
+        let sampleSum = 0;
+        for (let i = 0; i < sampleIndices.length; i++) sampleSum += d2.continuousTruth[sampleIndices[i]];
+        const naiveTotal = (sampleSum / sampleIndices.length) * (d2.width * d2.height);
+
         // Predicted total biomass distribution with true total as reference line
         PNASCharts.destroy(state.charts.areaDist);
         const chartsContainer = document.getElementById('summary-charts-container');
@@ -999,9 +1014,9 @@ const App = (() => {
                 xLabel: 'Predicted Total Biomass (M Mg)',
                 yLabel: 'Frequency',
                 color: '#228833',
-                bins: 25,
                 trueLine: trueTotal / 1e6,
-                thresholdLabel: 'True total',
+                thresholdLine: naiveTotal / 1e6,
+                thresholdLabel: 'Naive (sample scaling)',
             });
         }
     }
@@ -1033,7 +1048,13 @@ const App = (() => {
             RasterViz.renderContinuous(canvas, uncertainty, subW, subH, 0, maxUncertainty);
             const legendEl = document.getElementById('legend-uncertainty');
             if (legendEl) {
-                RasterViz.createColorBar(legendEl, 0, maxUncertainty, state.mode === 'categorical' ? 'Prediction std. dev.' : 'Biomass std. dev. (Mg/ha)');
+                let uncLabel;
+                if (state.mode === 'categorical') {
+                    uncLabel = 'Classification instability (std. dev. of class predictions across replicates)';
+                } else {
+                    uncLabel = 'Biomass std. dev. (Mg/ha)';
+                }
+                RasterViz.createColorBar(legendEl, 0, maxUncertainty, uncLabel);
             }
         }
 
@@ -1487,10 +1508,11 @@ const App = (() => {
                         This is because nearby pixels that are very similar to each other end up in both training
                         and test sets, making the model appear more accurate than it truly is.`;
                 } else {
-                    resultText = `<strong>Result:</strong> In this case, random splitting did not substantially inflate accuracy
+                    resultText = `<strong>Result:</strong> In this case, the random-split estimate was not inflated because the
+                        reference data was a true random sample
                         (${(pitfallOAStats.mean * 100).toFixed(1)}% vs ${(spatialOAStats.mean * 100).toFixed(1)}% with spatial blocking).
-                        However, this does not mean spatial blocking is unnecessary — with different data or sampling strategies,
-                        random splitting routinely overestimates accuracy.`;
+                        However, most real-life reference data sets will not be truly random samples of the landscape,
+                        making spatial blocking the appropriate methodological choice.`;
                 }
                 statsEl.innerHTML = `
                     <div class="info-alert info-alert--warning">
@@ -1565,10 +1587,11 @@ const App = (() => {
                         learning generalisable spectral-biomass relationships.
                         <strong>A map validated this way would not meet the mapping standard.</strong>`;
                 } else {
-                    resultText = `<strong>Result:</strong> In this case, random splitting did not substantially inflate R²
+                    resultText = `<strong>Result:</strong> In this case, the random-split estimate was not inflated because the
+                        reference data was a true random sample
                         (${pitfallR2Stats.mean.toFixed(3)} vs ${spatialR2Stats.mean.toFixed(3)} with spatial blocking).
-                        However, this does not mean spatial blocking is unnecessary — with different data,
-                        random splitting routinely overestimates accuracy.`;
+                        However, most real-life reference data sets will not be truly random samples of the landscape,
+                        making spatial blocking the appropriate methodological choice.`;
                 }
                 statsEl.innerHTML = `
                     <div class="info-alert info-alert--warning">
@@ -1745,6 +1768,7 @@ const App = (() => {
         const strategy = state.config.samplingStrategy || 'clustered';
 
         if (isClassification) {
+            const d = state.data;
             const oas = results.map(r => r.metrics.overallAccuracy);
             const estOA = PNASCharts.summaryStats(oas).mean * 100;
             const trueOA = (trueAccuracies.reduce((a,b)=>a+b.overallAccuracy,0)/trueAccuracies.length) * 100;
@@ -1762,6 +1786,33 @@ const App = (() => {
                 <div class="stat-card__ci">Independent test (10,000 pixels)</div>
               </div>
             `;
+
+            // Per-class User's and Producer's accuracy with True Landscape values
+            html += `<div style="margin-top:16px; border-top:1px solid #ddd; padding-top:12px;">
+              <div style="font-weight:600; font-size:0.95rem; margin-bottom:8px;">Per-Class Accuracy (Estimated vs True Landscape)</div>
+              <table style="width:100%; border-collapse:collapse; font-size:0.85rem;">
+                <thead><tr style="border-bottom:2px solid #ccc;">
+                  <th style="text-align:left; padding:4px 8px;">Class</th>
+                  <th style="padding:4px 8px;">User's Acc. (Est.)</th>
+                  <th style="padding:4px 8px;">User's Acc. (True)</th>
+                  <th style="padding:4px 8px;">Producer's Acc. (Est.)</th>
+                  <th style="padding:4px 8px;">Producer's Acc. (True)</th>
+                </tr></thead><tbody>`;
+
+            for (let c = 0; c < d.numClasses; c++) {
+                const estUA = (results.reduce((s,r) => s + r.metrics.userAccuracy[c], 0) / results.length * 100).toFixed(1);
+                const estPA = (results.reduce((s,r) => s + r.metrics.producerAccuracy[c], 0) / results.length * 100).toFixed(1);
+                const trueUA = trueAccuracies.length > 0 ? (trueAccuracies.reduce((s,t) => s + t.userAccuracy[c], 0) / trueAccuracies.length * 100).toFixed(1) : '—';
+                const truePA = trueAccuracies.length > 0 ? (trueAccuracies.reduce((s,t) => s + t.producerAccuracy[c], 0) / trueAccuracies.length * 100).toFixed(1) : '—';
+                html += `<tr style="border-bottom:1px solid #eee;">
+                  <td style="text-align:left; padding:4px 8px; font-weight:500;">${d.classNames[c]}</td>
+                  <td style="text-align:center; padding:4px 8px;">${estUA}%</td>
+                  <td style="text-align:center; padding:4px 8px;">${trueUA}%</td>
+                  <td style="text-align:center; padding:4px 8px;">${estPA}%</td>
+                  <td style="text-align:center; padding:4px 8px;">${truePA}%</td>
+                </tr>`;
+            }
+            html += `</tbody></table></div>`;
             
             let lowAccNote = '';
             if (estOA < 70) {
@@ -1802,6 +1853,14 @@ const App = (() => {
             const trueR2 = trueAccuracies.reduce((a,b)=>a+b.r2,0)/trueAccuracies.length;
             const diff = trueR2 - estR2;
 
+            const rmses = results.map(r => r.metrics.rmse);
+            const estRMSE = PNASCharts.summaryStats(rmses).mean;
+            const trueRMSE = trueAccuracies.reduce((a,b)=>a+b.rmse,0)/trueAccuracies.length;
+
+            const relRmses = results.map(r => r.metrics.relRmse);
+            const estRelRMSE = PNASCharts.summaryStats(relRmses).mean;
+            const trueRelRMSE = trueAccuracies.reduce((a,b)=>a+b.relRmse,0)/trueAccuracies.length;
+
             html += `
               <div class="stat-card">
                 <div class="stat-card__label">Expected Map R²</div>
@@ -1814,6 +1873,27 @@ const App = (() => {
                 <div class="stat-card__ci">Independent test (10,000 pixels)</div>
               </div>
             `;
+
+            // Additional continuous metrics with True Landscape
+            html += `<div style="margin-top:16px; border-top:1px solid #ddd; padding-top:12px;">
+              <div style="font-weight:600; font-size:0.95rem; margin-bottom:8px;">Additional Metrics (Estimated vs True Landscape)</div>
+              <table style="width:100%; border-collapse:collapse; font-size:0.85rem;">
+                <thead><tr style="border-bottom:2px solid #ccc;">
+                  <th style="text-align:left; padding:4px 8px;">Metric</th>
+                  <th style="padding:4px 8px;">Estimated</th>
+                  <th style="padding:4px 8px;">True Landscape</th>
+                </tr></thead><tbody>
+                <tr style="border-bottom:1px solid #eee;">
+                  <td style="text-align:left; padding:4px 8px;">RMSE (Mg/ha)</td>
+                  <td style="text-align:center; padding:4px 8px;">${estRMSE.toFixed(1)}</td>
+                  <td style="text-align:center; padding:4px 8px;">${trueRMSE.toFixed(1)}</td>
+                </tr>
+                <tr style="border-bottom:1px solid #eee;">
+                  <td style="text-align:left; padding:4px 8px;">Relative RMSE (%)</td>
+                  <td style="text-align:center; padding:4px 8px;">${estRelRMSE.toFixed(1)}%</td>
+                  <td style="text-align:center; padding:4px 8px;">${trueRelRMSE.toFixed(1)}%</td>
+                </tr>
+              </tbody></table></div>`;
             
             let lowAccNote = '';
             if (estR2 < 0.5) {

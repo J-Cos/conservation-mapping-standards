@@ -66,8 +66,17 @@ const PNASCharts = (() => {
         };
     }
 
+    /* --- Optimal bin count via Sturges rule --- */
+    function sturgesBins(n) {
+        return Math.max(1, Math.ceil(Math.log2(n) + 1));
+    }
+
     /* --- Histogram --- */
-    function histogram(canvasId, values, { title, xLabel, yLabel, color, bins = 20, thresholdLine = null, thresholdLabel = null, trueLine = null } = {}) {
+    function histogram(canvasId, values, { title, xLabel, yLabel, color, bins, thresholdLine = null, thresholdLabel = null, trueLine = null } = {}) {
+        // Use caller-specified bins if provided, otherwise compute via Sturges rule
+        if (bins === undefined || bins === null) {
+            bins = sturgesBins(values.length);
+        }
         const canvas = document.getElementById(canvasId);
         if (!canvas) return null;
 
@@ -117,13 +126,13 @@ const PNASCharts = (() => {
                     ctx.moveTo(xPos, chart.chartArea.top);
                     ctx.lineTo(xPos, chart.chartArea.bottom);
                     ctx.stroke();
-                    // Draw label
+                    // Draw label (inside chart area to avoid clipping)
                     const labelText = thresholdLabel || (thresholdLine < 1 ? thresholdLine.toFixed(1) : thresholdLine + '%');
                     ctx.fillStyle = '#EE6677';
                     ctx.font = '10px Inter, sans-serif';
                     ctx.textAlign = 'center';
-                    ctx.textBaseline = 'bottom';
-                    ctx.fillText(labelText, xPos, chart.chartArea.top - 2);
+                    ctx.textBaseline = 'top';
+                    ctx.fillText(labelText, xPos, chart.chartArea.top + 6);
                     ctx.restore();
                 }
             });
@@ -143,12 +152,12 @@ const PNASCharts = (() => {
                     ctx.moveTo(xPos, chart.chartArea.top);
                     ctx.lineTo(xPos, chart.chartArea.bottom);
                     ctx.stroke();
-                    // Draw a label at the top
+                    // Draw a label at the top (inside chart area to avoid clipping)
                     ctx.fillStyle = '#222222';
                     ctx.font = 'bold 11px Inter, sans-serif';
                     ctx.textAlign = 'center';
-                    ctx.textBaseline = 'bottom';
-                    ctx.fillText('TRUE', xPos, chart.chartArea.top - 4);
+                    ctx.textBaseline = 'top';
+                    ctx.fillText('TRUE', xPos, chart.chartArea.top + 6);
                     ctx.restore();
                 }
             });
@@ -160,7 +169,7 @@ const PNASCharts = (() => {
             options: {
                 responsive: true,
                 maintainAspectRatio: true,
-                layout: { padding: { top: 15 } },
+                layout: { padding: { top: 6 } },
                 plugins: {
                     legend: { display: false },
                     title: { display: !!title, text: title, font: { size: 13, weight: '700' }, padding: { bottom: 12 } },

@@ -1,10 +1,10 @@
-# Spatial Mapping Standards — Interactive Demonstrator
+# Conservation Map Standards — Interactive Demonstrator
 
 > **[Live Demo →](https://j-cos.github.io/conservation-mapping-standards/)**
 
 Companion to: **Schulte to Bühne, H., Williams, J., Byrne, A. & Pettorelli, N. (2026). A mapping standard for conservation. *Methods in Ecology and Evolution*.**
 
-An interactive, browser-based demonstrator that accompanies the proposed spatial mapping standard. Walk through the best-practice accuracy assessment pipeline on synthetic data — then see what happens when common shortcuts are taken.
+An interactive, browser-based demonstrator that accompanies the proposed conservation map standard. Walk through the best-practice accuracy assessment pipeline on synthetic data — then see what happens when common shortcuts are taken.
 
 All computation runs **entirely in the browser** — no server, no data uploads, no dependencies to install. Open the link and click through the pipeline.
 
