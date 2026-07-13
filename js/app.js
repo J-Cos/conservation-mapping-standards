@@ -733,7 +733,6 @@ const App = (() => {
             xLabel: 'R²',
             yLabel: 'Frequency',
             color: '#2D6A4F',
-            bins: 25,
             thresholdLine: 0.8,
             thresholdLabel: 'Good (0.8)',
             trueLine: trueR2Mean,
@@ -746,7 +745,6 @@ const App = (() => {
             xLabel: 'RMSE (Mg/ha)',
             yLabel: 'Frequency',
             color: '#4477AA',
-            bins: 25,
             trueLine: trueRmseMean,
         });
 
@@ -757,7 +755,6 @@ const App = (() => {
             xLabel: 'Relative RMSE',
             yLabel: 'Frequency',
             color: '#EE6677',
-            bins: 25,
             thresholdLine: 0.2,
             thresholdLabel: 'Max (20%)',
             trueLine: trueRelRmseMean,
@@ -1069,8 +1066,12 @@ const App = (() => {
                 const classPred = new Uint8Array(nSub);
                 for (let i = 0; i < nSub; i++) classPred[i] = Math.round(Math.max(0, Math.min(d.numClasses - 1, meanPred[i])));
                 RasterViz.renderClassMap(meanCanvas, classPred, subW, subH, d.classColors);
+                const legendEl = document.getElementById('legend-mean-pred');
+                if (legendEl) RasterViz.createDiscreteLegend(legendEl, d.classNames, d.classColors);
             } else {
                 RasterViz.renderContinuous(meanCanvas, meanPred, subW, subH, 0, 500);
+                const legendEl = document.getElementById('legend-mean-pred');
+                if (legendEl) RasterViz.createColorBar(legendEl, 0, 500, 'Predicted biomass (Mg/ha)');
             }
         }
     }

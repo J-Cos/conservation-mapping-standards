@@ -353,10 +353,10 @@
             Confidence intervals should not cross these thresholds.</span>
         </p>
         <p class="step-description" style="margin-top:8px; color:#555;">
-          <em>A large confidence interval around a high accuracy metric means that we cannot say
+          A large confidence interval around a high accuracy metric means that we cannot say
           confidently that the accuracy metric truly is high. The smaller the confidence interval,
           the more certain we can be that a map created by a single model drawn from this sample
-          gives a reliable representation of the truth.</em>
+          gives a reliable representation of the truth.
         </p>
         <details class="tech-detail">
           <summary>Technical details</summary>
@@ -462,22 +462,23 @@
       </div>
       <div class="step-panel__body">
         <p class="step-description">
+          Conservation maps are often used to generate summary statistics, such as the total
+          area of a particular land cover class, or the average or total biomass over a given
+          section of the map. Simply counting pixels per class, or summing values of continuous
+          variables, ignores the errors that were calculated in Section 5.
+          This leads to <strong>biased estimates</strong>.
           <span data-mode="categorical">
-            Conservation maps are often used to generate summary statistics, such as the total
-            area of a particular land cover class, or the average or total biomass over a given
-            section of the map. Simply counting pixels per class, or summing values of continuous
-            variables, ignores the classification errors that were calculated in Section 5.
-            This leads to <strong>biased area estimates</strong>. For maps of categorical variables,
-            the <strong>error matrix</strong> from each assessment replicate is used to correct
-            class areas
+            For maps of categorical variables, the <strong>error matrix</strong> from each
+            assessment replicate is used to correct class areas
             (<span class="tech-term">Olofsson et al. 2014<span class="tech-term__tip">Olofsson et al. (2014) "Good practices for estimating area and assessing accuracy of land change" — the standard reference for error-corrected area estimation using stratified estimation with the error matrix.</span></span>),
             producing <strong>error-corrected area estimates</strong> with 95% confidence intervals.
             Compare the corrected vs naive estimates below.
           </span>
           <span data-mode="continuous">
-            Each replicate predicts biomass for the entire map.
-            The distribution of <strong>predicted total biomass</strong> across replicates
-            quantifies uncertainty, and is compared against the known true total.
+            Each replicate predicts biomass for the entire map, producing a distribution
+            of <strong>predicted total biomass</strong> that quantifies uncertainty.
+            Compare the predicted distribution against the known true total and the
+            naive estimate (sample mean scaled to the full map) below.
           </span>
         </p>
         <p class="step-description" style="margin-top:8px; color:#555;">
@@ -517,6 +518,7 @@
             <div class="raster-canvas-wrap">
               <canvas id="canvas-mean-pred"></canvas>
             </div>
+            <div id="legend-mean-pred" class="mt-2"></div>
           </div>
           <div class="figure-container">
             <div class="figure-container__title">Pixel-Level Uncertainty <span class="tech-term">(Std Dev)<span class="tech-term__tip">Standard deviation of predictions across all bootstrap replicates for each pixel. High values (warm colours) indicate areas where the model is uncertain.</span></span></div>
