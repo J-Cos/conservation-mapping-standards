@@ -1452,8 +1452,12 @@ const App = (() => {
             
             const spatialOAStats = PNASCharts.summaryStats(spatialOA);
             const pitfallOAStats = PNASCharts.summaryStats(pitfallOA);
+
+            const spatialTrueAccuracies = spatialResults.filter(r => r.trueMetrics).map(r => r.trueMetrics.overallAccuracy);
+            const trueSpatialOAMean = spatialTrueAccuracies.length ? (spatialTrueAccuracies.reduce((a,b)=>a+b,0)/spatialTrueAccuracies.length) : null;
+
             const pitfallTrueAccuracies = pitfallResults.filter(r => r.trueMetrics).map(r => r.trueMetrics.overallAccuracy);
-            const trueOAMean = pitfallTrueAccuracies.length ? (pitfallTrueAccuracies.reduce((a,b)=>a+b,0)/pitfallTrueAccuracies.length) : null;
+            const trueRandomOAMean = pitfallTrueAccuracies.length ? (pitfallTrueAccuracies.reduce((a,b)=>a+b,0)/pitfallTrueAccuracies.length) : null;
 
             // Summary comparison stats (computed early for chart title)
             const inflationVal = (pitfallOAStats.mean - spatialOAStats.mean) * 100;
@@ -1469,7 +1473,7 @@ const App = (() => {
                 bins: 15,
                 thresholdLine: 0.85,
                 thresholdLabel: 'Good (85%)',
-                trueLine: trueOAMean,
+                trueLine: trueRandomOAMean,
             });
 
             // Chart 2 & 3: User/Producer accuracy comparison
@@ -1512,26 +1516,27 @@ const App = (() => {
                 }
 
                 let trueText = '';
-                if (trueOAMean !== null) {
-                    const trueOAPct = (trueOAMean * 100).toFixed(1);
-                    const spatialBias = Math.abs(spatialOAStats.mean - trueOAMean) * 100;
-                    const randomBias = Math.abs(pitfallOAStats.mean - trueOAMean) * 100;
+                if (trueSpatialOAMean !== null && trueRandomOAMean !== null) {
+                    const trueSpatialPct = (trueSpatialOAMean * 100).toFixed(1);
+                    const trueRandomPct = (trueRandomOAMean * 100).toFixed(1);
+                    const spatialBias = Math.abs(spatialOAStats.mean - trueSpatialOAMean) * 100;
+                    const randomBias = Math.abs(pitfallOAStats.mean - trueRandomOAMean) * 100;
                     const spatialCloser = spatialBias < randomBias;
                     const biasClose = Math.abs(spatialBias - randomBias) < 0.5;
 
                     if (biasClose) {
-                        trueText = `<br><br><em>Reality Check:</em> The <b>true</b> accuracy was <b>${trueOAPct}%</b>.
-                            Both estimates were similarly close to the true value
+                        trueText = `<br><br><em>Reality Check:</em> The <b>true</b> accuracy of the spatial-blocked model was <b>${trueSpatialPct}%</b>, and the random-split model was <b>${trueRandomPct}%</b>.
+                            Both estimates were similarly close to their respective true values
                             (spatial blocking off by ${spatialBias.toFixed(1)}pp, random split off by ${randomBias.toFixed(1)}pp).
                             Spatial blocking remains the methodologically correct approach.`;
                     } else if (spatialCloser) {
-                        trueText = `<br><br><em>Reality Check:</em> The <b>true</b> accuracy was <b>${trueOAPct}%</b>.
+                        trueText = `<br><br><em>Reality Check:</em> The <b>true</b> accuracy of the spatial-blocked model was <b>${trueSpatialPct}%</b> (and the random-split model was <b>${trueRandomPct}%</b>).
                             The spatial-blocking estimate (${spatialPct}%, off by ${spatialBias.toFixed(1)}pp)
                             was closer to reality than the random-split estimate (${randomPct}%, off by ${randomBias.toFixed(1)}pp).`;
                     } else {
-                        trueText = `<br><br><em>Reality Check:</em> The <b>true</b> accuracy was <b>${trueOAPct}%</b>.
+                        trueText = `<br><br><em>Reality Check:</em> The <b>true</b> accuracy of the spatial-blocked model was <b>${trueSpatialPct}%</b> (and the random-split model was <b>${trueRandomPct}%</b>).
                             In this case, the random-split estimate (${randomPct}%, off by ${randomBias.toFixed(1)}pp)
-                            happened to be closer to the true value than the spatial-blocking estimate
+                            happened to be closer to its true value than the spatial-blocking estimate
                             (${spatialPct}%, off by ${spatialBias.toFixed(1)}pp).
                             This can occur when spatial blocking is conservative, but does not invalidate the approach
                             — with real-world (non-random) reference data, random splitting would likely inflate accuracy.`;
@@ -1549,8 +1554,11 @@ const App = (() => {
             // Continuous mode
             const spatialR2 = spatialResults.map(r => r.metrics.r2);
             const pitfallR2 = pitfallResults.map(r => r.metrics.r2);
+            const spatialTrueR2s = spatialResults.filter(r => r.trueMetrics).map(r => r.trueMetrics.r2);
+            const trueSpatialR2Mean = spatialTrueR2s.length ? (spatialTrueR2s.reduce((a,b)=>a+b,0)/spatialTrueR2s.length) : null;
+
             const pitfallTrueR2s = pitfallResults.filter(r => r.trueMetrics).map(r => r.trueMetrics.r2);
-            const trueR2Mean = pitfallTrueR2s.length ? (pitfallTrueR2s.reduce((a,b)=>a+b,0)/pitfallTrueR2s.length) : null;
+            const trueRandomR2Mean = pitfallTrueR2s.length ? (pitfallTrueR2s.reduce((a,b)=>a+b,0)/pitfallTrueR2s.length) : null;
 
             const pitfallTrueRMSEs = pitfallResults.filter(r => r.trueMetrics).map(r => r.trueMetrics.rmse);
             const trueRMSEMean = pitfallTrueRMSEs.length ? (pitfallTrueRMSEs.reduce((a,b)=>a+b,0)/pitfallTrueRMSEs.length) : null;
@@ -1571,7 +1579,7 @@ const App = (() => {
                 color: '#EE6677',
                 thresholdLine: 0.8,
                 thresholdLabel: 'Good (0.8)',
-                trueLine: trueR2Mean,
+                trueLine: trueRandomR2Mean,
             });
 
             const spatialRMSE = spatialResults.map(r => r.metrics.rmse);
@@ -1620,26 +1628,27 @@ const App = (() => {
                 }
 
                 let trueText = '';
-                if (trueR2Mean !== null) {
-                    const trueR2Str = trueR2Mean.toFixed(3);
-                    const spatialBias = Math.abs(spatialR2Stats.mean - trueR2Mean);
-                    const randomBias = Math.abs(pitfallR2Stats.mean - trueR2Mean);
+                if (trueSpatialR2Mean !== null && trueRandomR2Mean !== null) {
+                    const trueSpatialR2Str = trueSpatialR2Mean.toFixed(3);
+                    const trueRandomR2Str = trueRandomR2Mean.toFixed(3);
+                    const spatialBias = Math.abs(spatialR2Stats.mean - trueSpatialR2Mean);
+                    const randomBias = Math.abs(pitfallR2Stats.mean - trueRandomR2Mean);
                     const spatialCloser = spatialBias < randomBias;
                     const biasClose = Math.abs(spatialBias - randomBias) < 0.005;
 
                     if (biasClose) {
-                        trueText = `<br><br><em>Reality Check:</em> The <b>true</b> R² was <b>${trueR2Str}</b>.
-                            Both estimates were similarly close to the true value
+                        trueText = `<br><br><em>Reality Check:</em> The <b>true</b> R² of the spatial-blocked model was <b>${trueSpatialR2Str}</b>, and the random-split model was <b>${trueRandomR2Str}</b>.
+                            Both estimates were similarly close to their respective true values
                             (spatial blocking off by ${(spatialBias*100).toFixed(1)}pp, random split off by ${(randomBias*100).toFixed(1)}pp).
                             Spatial blocking remains the methodologically correct approach.`;
                     } else if (spatialCloser) {
-                        trueText = `<br><br><em>Reality Check:</em> The <b>true</b> R² was <b>${trueR2Str}</b>.
+                        trueText = `<br><br><em>Reality Check:</em> The <b>true</b> R² of the spatial-blocked model was <b>${trueSpatialR2Str}</b> (and the random-split model was <b>${trueRandomR2Str}</b>).
                             The spatial-blocking estimate (${spatialR2Str}, off by ${(spatialBias*100).toFixed(1)}pp)
                             was closer to reality than the random-split estimate (${randomR2}, off by ${(randomBias*100).toFixed(1)}pp).`;
                     } else {
-                        trueText = `<br><br><em>Reality Check:</em> The <b>true</b> R² was <b>${trueR2Str}</b>.
+                        trueText = `<br><br><em>Reality Check:</em> The <b>true</b> R² of the spatial-blocked model was <b>${trueSpatialR2Str}</b> (and the random-split model was <b>${trueRandomR2Str}</b>).
                             In this case, the random-split estimate (${randomR2}, off by ${(randomBias*100).toFixed(1)}pp)
-                            happened to be closer to the true value than the spatial-blocking estimate
+                            happened to be closer to its true value than the spatial-blocking estimate
                             (${spatialR2Str}, off by ${(spatialBias*100).toFixed(1)}pp).
                             This can occur when spatial blocking is conservative, but does not invalidate the approach
                             — with real-world (non-random) reference data, random splitting would likely inflate accuracy.`;
