@@ -1489,32 +1489,54 @@ const App = (() => {
                 xLabels: d.classNames,
                 yLabel: 'Accuracy',
             });
-            let trueText = '';
-            if (trueOAMean !== null) {
-                const trueOAPct = (trueOAMean * 100).toFixed(1);
-                if (trueOAMean < pitfallOAStats.mean) {
-                    trueText = `<br><br><em>Reality Check:</em> The <b>true</b> accuracy of the map across the entire landscape was actually only <b>${trueOAPct}%</b>. The spatial-blocking estimate was closer to this reality, but the random-split method overestimated it.`;
-                } else {
-                    trueText = `<br><br><em>Reality Check:</em> The <b>true</b> accuracy of the map across the entire landscape was <b>${trueOAPct}%</b>. In this case, the random-split estimate was not inflated, but the spatial-blocking method remains the methodologically correct approach.`;
-                }
-            }
-
+            // --- Build coherent pitfall text (categorical) ---
             const statsEl = document.getElementById('pitfall-stats');
             if (statsEl) {
+                const randomPct = (pitfallOAStats.mean * 100).toFixed(1);
+                const spatialPct = (spatialOAStats.mean * 100).toFixed(1);
                 let resultText;
+
                 if (inflationVal > 0.5) {
-                    resultText = `<strong>Result:</strong> Random pixel-level splitting inflated the estimated accuracy by
-                        <strong>+${inflation} percentage points</strong>
-                        (${(pitfallOAStats.mean * 100).toFixed(1)}% vs ${(spatialOAStats.mean * 100).toFixed(1)}% with spatial blocking).
-                        This is because nearby pixels that are very similar to each other end up in both training
-                        and test sets, making the model appear more accurate than it truly is.`;
+                    resultText = `<strong>Result:</strong> Random pixel-level splitting produced a higher accuracy estimate
+                        by <strong>+${inflation} percentage points</strong>
+                        (${randomPct}% vs ${spatialPct}% with spatial blocking).
+                        Without spatial blocking, spatially autocorrelated data in both training and test sets
+                        can lead to overoptimistic accuracy estimates.`;
                 } else {
                     resultText = `<strong>Result:</strong> In this case, the random-split estimate was not inflated because the
                         reference data was a true random sample
-                        (${(pitfallOAStats.mean * 100).toFixed(1)}% vs ${(spatialOAStats.mean * 100).toFixed(1)}% with spatial blocking).
+                        (${randomPct}% vs ${spatialPct}% with spatial blocking).
                         However, most real-life reference data sets will not be truly random samples of the landscape,
                         making spatial blocking the appropriate methodological choice.`;
                 }
+
+                let trueText = '';
+                if (trueOAMean !== null) {
+                    const trueOAPct = (trueOAMean * 100).toFixed(1);
+                    const spatialBias = Math.abs(spatialOAStats.mean - trueOAMean) * 100;
+                    const randomBias = Math.abs(pitfallOAStats.mean - trueOAMean) * 100;
+                    const spatialCloser = spatialBias < randomBias;
+                    const biasClose = Math.abs(spatialBias - randomBias) < 0.5;
+
+                    if (biasClose) {
+                        trueText = `<br><br><em>Reality Check:</em> The <b>true</b> accuracy was <b>${trueOAPct}%</b>.
+                            Both estimates were similarly close to the true value
+                            (spatial blocking off by ${spatialBias.toFixed(1)}pp, random split off by ${randomBias.toFixed(1)}pp).
+                            Spatial blocking remains the methodologically correct approach.`;
+                    } else if (spatialCloser) {
+                        trueText = `<br><br><em>Reality Check:</em> The <b>true</b> accuracy was <b>${trueOAPct}%</b>.
+                            The spatial-blocking estimate (${spatialPct}%, off by ${spatialBias.toFixed(1)}pp)
+                            was closer to reality than the random-split estimate (${randomPct}%, off by ${randomBias.toFixed(1)}pp).`;
+                    } else {
+                        trueText = `<br><br><em>Reality Check:</em> The <b>true</b> accuracy was <b>${trueOAPct}%</b>.
+                            In this case, the random-split estimate (${randomPct}%, off by ${randomBias.toFixed(1)}pp)
+                            happened to be closer to the true value than the spatial-blocking estimate
+                            (${spatialPct}%, off by ${spatialBias.toFixed(1)}pp).
+                            This can occur when spatial blocking is conservative, but does not invalidate the approach
+                            — with real-world (non-random) reference data, random splitting would likely inflate accuracy.`;
+                    }
+                }
+
                 statsEl.innerHTML = `
                     <div class="info-alert info-alert--warning">
                         ${resultText}
@@ -1568,32 +1590,56 @@ const App = (() => {
                 thresholdLine: 0.2,
                 thresholdLabel: 'Max (20%)',
             });
-            let trueText = '';
-            if (trueR2Mean !== null) {
-                if (trueR2Mean < pitfallR2Stats.mean) {
-                    trueText = `<br><br><em>Reality Check:</em> The <b>true</b> R² of the map across the entire landscape was actually only <b>${trueR2Mean.toFixed(3)}</b>. The spatial-blocking estimate was closer to this reality, but the random-split method overestimated it.`;
-                } else {
-                    trueText = `<br><br><em>Reality Check:</em> The <b>true</b> R² of the map was <b>${trueR2Mean.toFixed(3)}</b>. In this case, the random-split estimate was not inflated, but the spatial-blocking method remains the methodologically correct approach.`;
-                }
-            }
 
+            // --- Build coherent pitfall text (continuous) ---
             const statsEl = document.getElementById('pitfall-stats');
             if (statsEl) {
+                const randomR2 = pitfallR2Stats.mean.toFixed(3);
+                const spatialR2Str = spatialR2Stats.mean.toFixed(3);
                 let resultText;
+
                 if (r2InflationVal > 0.005) {
-                    resultText = `<strong>Result:</strong> Random pixel-level splitting inflated R² by
-                        <strong>+${r2Inflation} points</strong>
-                        (${pitfallR2Stats.mean.toFixed(3)} vs ${spatialR2Stats.mean.toFixed(3)} with spatial blocking).
-                        Without spatial blocking, the model memorises local spatial patterns rather than
-                        learning generalisable spectral-biomass relationships.
+                    resultText = `<strong>Result:</strong> Random pixel-level splitting produced a higher R² estimate
+                        by <strong>+${r2Inflation} points</strong>
+                        (${randomR2} vs ${spatialR2Str} with spatial blocking).
+                        Without spatial blocking, spatially autocorrelated data in both training and test sets
+                        can lead to overoptimistic performance estimates.
                         <strong>A map validated this way would not meet the mapping standard.</strong>`;
                 } else {
                     resultText = `<strong>Result:</strong> In this case, the random-split estimate was not inflated because the
                         reference data was a true random sample
-                        (${pitfallR2Stats.mean.toFixed(3)} vs ${spatialR2Stats.mean.toFixed(3)} with spatial blocking).
+                        (${randomR2} vs ${spatialR2Str} with spatial blocking).
                         However, most real-life reference data sets will not be truly random samples of the landscape,
                         making spatial blocking the appropriate methodological choice.`;
                 }
+
+                let trueText = '';
+                if (trueR2Mean !== null) {
+                    const trueR2Str = trueR2Mean.toFixed(3);
+                    const spatialBias = Math.abs(spatialR2Stats.mean - trueR2Mean);
+                    const randomBias = Math.abs(pitfallR2Stats.mean - trueR2Mean);
+                    const spatialCloser = spatialBias < randomBias;
+                    const biasClose = Math.abs(spatialBias - randomBias) < 0.005;
+
+                    if (biasClose) {
+                        trueText = `<br><br><em>Reality Check:</em> The <b>true</b> R² was <b>${trueR2Str}</b>.
+                            Both estimates were similarly close to the true value
+                            (spatial blocking off by ${(spatialBias*100).toFixed(1)}pp, random split off by ${(randomBias*100).toFixed(1)}pp).
+                            Spatial blocking remains the methodologically correct approach.`;
+                    } else if (spatialCloser) {
+                        trueText = `<br><br><em>Reality Check:</em> The <b>true</b> R² was <b>${trueR2Str}</b>.
+                            The spatial-blocking estimate (${spatialR2Str}, off by ${(spatialBias*100).toFixed(1)}pp)
+                            was closer to reality than the random-split estimate (${randomR2}, off by ${(randomBias*100).toFixed(1)}pp).`;
+                    } else {
+                        trueText = `<br><br><em>Reality Check:</em> The <b>true</b> R² was <b>${trueR2Str}</b>.
+                            In this case, the random-split estimate (${randomR2}, off by ${(randomBias*100).toFixed(1)}pp)
+                            happened to be closer to the true value than the spatial-blocking estimate
+                            (${spatialR2Str}, off by ${(spatialBias*100).toFixed(1)}pp).
+                            This can occur when spatial blocking is conservative, but does not invalidate the approach
+                            — with real-world (non-random) reference data, random splitting would likely inflate accuracy.`;
+                    }
+                }
+
                 statsEl.innerHTML = `
                     <div class="info-alert info-alert--warning">
                         ${resultText}
