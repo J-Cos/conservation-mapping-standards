@@ -272,28 +272,26 @@
         </p>
         <p class="step-description" style="margin-top:8px;">
           A single train/validation split can give a misleading accuracy estimate (overoptimistic
-          or overpessimistic). Instead, it is best practice to draw
-          <strong>B <span class="tech-term">bootstrap samples<span class="tech-term__tip">Bootstrap: a statistical resampling technique. Draw N items from your dataset with replacement to create a new sample of the same size, then repeat many times to estimate variability.</span></span></strong>
-          of spatial blocks (with replacement). For each replicate, train a Random Forest on the
-          reference data in the selected blocks and validate on the blocks
-          <strong>held out for validation</strong>. This produces <strong>B independent
-          accuracy estimates</strong> from which distributions and
+          or overpessimistic). Instead, it is best practice to repeat the process many times.
+          Each time, we pick N blocks <strong>with replacement</strong> &mdash; meaning some
+          blocks are chosen more than once and others are not chosen at all. The blocks that
+          were picked form the <strong>training set</strong>; the leftover blocks that were
+          never picked form an independent <strong>validation set</strong>.
+          Because of the way sampling with replacement works, roughly <strong>one third</strong>
+          of the blocks are left out each time (see Technical details for the maths).
+          Repeating this process <strong>B</strong> times produces <strong>B independent
+          accuracy estimates</strong>, from which distributions and
           <span class="tech-term">confidence intervals<span class="tech-term__tip">A 95% confidence interval means: if we repeated this entire process many times, 95% of the intervals would contain the true value. Wider intervals = less certainty.</span></span>
           are derived, revealing how certain we can be about map quality.
-          We here hold out ~36.8% of the blocks &mdash; this is the mathematical expectation from
-          bootstrap sampling, where each block has a probability of
-          (1 &minus; 1/N)<sup>N</sup> &asymp; 1/e &asymp; 36.8% of never being selected.
-          This provides a sufficiently large, statistically independent test set for robust
-          error statistics, while leaving the majority of the data (~63.2%) for model training.
         </p>
         <details class="tech-detail">
           <summary>Technical details</summary>
           <div class="tech-detail__body">
             <dl>
-              <dt>Bootstrap resampling</dt>
-              <dd>A bootstrap sample is created by choosing, at random, a set number of blocks with replacement from the total pool of <em>N</em> blocks. This means that some blocks may be chosen more than once. This process is repeated several times (often in the order of 100 and 1000s of times) to create a collection of samples. On average, ~63.2% of blocks are drawn at least once (training set); the remaining ~36.8% are the validation set ("out-of-bag").</dd>
-              <dt>Out-of-bag (OOB) blocks</dt>
-              <dd>In each bootstrap replicate, ~36.8% of blocks are not drawn ("out of bag"). These unseen blocks form the validation set. The model is never tested on data it trained on.</dd>
+              <dt>Bootstrap resampling &amp; the "one third" rule</dt>
+              <dd>Each bootstrap sample draws N blocks with replacement from a pool of N blocks. Because some blocks are drawn more than once, others are never drawn at all. The probability that any single block is never selected is (1 &minus; 1/N)<sup>N</sup>, which converges to 1/e &asymp; 36.8% as N grows. So on average, ~36.8% of blocks are left out and serve as the validation set, while ~63.2% are used for training. This provides a sufficiently large, independent test set for robust error statistics without requiring the user to manually split the data.</dd>
+              <dt>Out-of-bag (OOB)</dt>
+              <dd>The term used in the literature for the blocks left out of a given bootstrap sample. Because OOB blocks were never used during training, they provide a genuinely independent test of how well the model generalises to unseen data.</dd>
               <dt>Random Forest classifier</dt>
               <dd>A machine-learning algorithm that can learn non-linear relationships between input data (such as satellite data) and a response variable (such as land cover, or biomass) using training data. It is made up of an ensemble of T decision trees. Each tree is trained on a bootstrap sample of the training data and a random subset of features (mtry = &radic;p for classification, p/3 for regression). Predictions are combined by majority vote or averaging.</dd>
               <dt>Repeat assessments (B)</dt>
