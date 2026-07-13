@@ -126,13 +126,13 @@ const PNASCharts = (() => {
                     ctx.moveTo(xPos, chart.chartArea.top);
                     ctx.lineTo(xPos, chart.chartArea.bottom);
                     ctx.stroke();
-                    // Draw label (inside chart area to avoid clipping)
+                    // Draw label (inside chart area to avoid clipping, offset from TRUE label)
                     const labelText = thresholdLabel || (thresholdLine < 1 ? thresholdLine.toFixed(1) : thresholdLine + '%');
                     ctx.fillStyle = '#EE6677';
                     ctx.font = '10px Inter, sans-serif';
                     ctx.textAlign = 'center';
                     ctx.textBaseline = 'top';
-                    ctx.fillText(labelText, xPos, chart.chartArea.top + 6);
+                    ctx.fillText(labelText, xPos, chart.chartArea.top + 18);
                     ctx.restore();
                 }
             });
