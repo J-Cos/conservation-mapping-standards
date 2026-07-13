@@ -1099,8 +1099,9 @@ const App = (() => {
             const biasThreshold = value <= 1.0 ? 0.05 : 5.0; 
             const color = Math.abs(diff) > biasThreshold ? '#D32F2F' : '#666'; 
             const diffStr = (diff >= 0 ? '+' : '') + (value <= 1.0 ? diff.toFixed(3) : diff.toFixed(1));
+            const labelWord = label.toLowerCase().includes('acc') ? 'Accuracy' : 'Value';
             trueHTML = `<div style="font-size: 0.85rem; margin-top: 8px; padding-top: 6px; border-top: 1px solid #ddd; color: #555; line-height: 1.3;">
-                True Landscape Accuracy:<br><b>${tStr}</b> 
+                True Landscape ${labelWord}:<br><b>${tStr}</b> 
                 <span style="color:${color}; font-size:0.8rem;">(Bias: ${diffStr})</span>
             </div>`;
         }
@@ -1548,8 +1549,14 @@ const App = (() => {
             // Continuous mode
             const spatialR2 = spatialResults.map(r => r.metrics.r2);
             const pitfallR2 = pitfallResults.map(r => r.metrics.r2);
-            const pitfallTrueAccuracies = pitfallResults.filter(r => r.trueMetrics).map(r => r.trueMetrics.r2);
-            const trueR2Mean = pitfallTrueAccuracies.length ? (pitfallTrueAccuracies.reduce((a,b)=>a+b,0)/pitfallTrueAccuracies.length) : null;
+            const pitfallTrueR2s = pitfallResults.filter(r => r.trueMetrics).map(r => r.trueMetrics.r2);
+            const trueR2Mean = pitfallTrueR2s.length ? (pitfallTrueR2s.reduce((a,b)=>a+b,0)/pitfallTrueR2s.length) : null;
+
+            const pitfallTrueRMSEs = pitfallResults.filter(r => r.trueMetrics).map(r => r.trueMetrics.rmse);
+            const trueRMSEMean = pitfallTrueRMSEs.length ? (pitfallTrueRMSEs.reduce((a,b)=>a+b,0)/pitfallTrueRMSEs.length) : null;
+
+            const pitfallTrueRelRMSEs = pitfallResults.filter(r => r.trueMetrics).map(r => r.trueMetrics.relRmse);
+            const trueRelRMSEMean = pitfallTrueRelRMSEs.length ? (pitfallTrueRelRMSEs.reduce((a,b)=>a+b,0)/pitfallTrueRelRMSEs.length) : null;
 
             const spatialR2Stats = PNASCharts.summaryStats(spatialR2);
             const pitfallR2Stats = PNASCharts.summaryStats(pitfallR2);
@@ -1562,7 +1569,6 @@ const App = (() => {
                 xLabel: 'R²',
                 yLabel: 'Frequency',
                 color: '#EE6677',
-                bins: 15,
                 thresholdLine: 0.8,
                 thresholdLabel: 'Good (0.8)',
                 trueLine: trueR2Mean,
@@ -1576,7 +1582,7 @@ const App = (() => {
                 xLabel: 'RMSE (Mg/ha)',
                 yLabel: 'Frequency',
                 color: '#EE6677',
-                bins: 15,
+                trueLine: trueRMSEMean,
             });
 
             const pitfallRelRMSE = pitfallResults.map(r => r.metrics.relRmse);
@@ -1586,9 +1592,9 @@ const App = (() => {
                 xLabel: 'Relative RMSE',
                 yLabel: 'Frequency',
                 color: '#EE6677',
-                bins: 15,
                 thresholdLine: 0.2,
                 thresholdLabel: 'Max (20%)',
+                trueLine: trueRelRMSEMean,
             });
 
             // --- Build coherent pitfall text (continuous) ---

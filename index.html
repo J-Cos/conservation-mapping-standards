@@ -500,8 +500,10 @@
               <dd>Each bootstrap replicate produces a different corrected area estimate. The distribution of these estimates gives a 95% CI showing the range within which the true area likely falls.</dd>
               <dt>Naive area (pixel counting)</dt>
               <dd>Shown in <span style="color:#EE6677;font-weight:600">red</span> for comparison. This is what you get if you simply count how many pixels the map assigns to each class — ignoring errors entirely.</dd>
-              <dt>Pixel-wise standard deviation (categorical)</dt>
-              <dd>For categorical (unordered) variables, pixel-wise standard deviation represents classification instability. For each pixel, the standard deviation of the predicted class index is computed across all B bootstrap replicates. A value of 0 means the pixel is consistently assigned to the same class across all replicates, while higher values indicate classification instability — the model is uncertain about which class this pixel belongs to. These high-uncertainty pixels typically cluster at class boundaries and transition zones.</dd>
+              <dt data-mode="categorical">Pixel-wise standard deviation (categorical)</dt>
+              <dd data-mode="categorical">For categorical (unordered) variables, pixel-wise standard deviation represents classification instability. For each pixel, the standard deviation of the predicted class index is computed across all B bootstrap replicates. A value of 0 means the pixel is consistently assigned to the same class across all replicates, while higher values indicate classification instability — the model is uncertain about which class this pixel belongs to. These high-uncertainty pixels typically cluster at class boundaries and transition zones.</dd>
+              <dt data-mode="continuous">Pixel-wise standard deviation (continuous)</dt>
+              <dd data-mode="continuous">For continuous variables, pixel-wise standard deviation represents prediction uncertainty in the same physical units as the variable (Mg/ha of biomass). It is calculated as the standard deviation of predicted values across all B bootstrap replicates for each pixel. Higher values (warmer colours) show where predictions vary widely between model runs, indicating lower confidence in the absolute values.</dd>
             </dl>
           </div>
         </details>
